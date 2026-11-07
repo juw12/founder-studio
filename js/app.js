@@ -163,6 +163,9 @@ function renderSetup() {
   $("#business").value = c.business || "";
   $("#target").value = c.target || "";
   $("#habits").value = (c.habits || []).join("\n");
+  const segmentCount = (c.segments || []).length;
+  $("#buyersSummary").textContent = `${segmentCount} segment${segmentCount === 1 ? "" : "s"} · ${$("#panelSize").value || 0} buyers · edit`;
+  if (!segmentCount) $("#buyersSection").open = true;
   $("#segments").innerHTML = (c.segments || []).map((s, i) => `
     <div class="item" data-i="${i}">
       <button class="del" data-del="segments" data-i="${i}" title="Remove">×</button>
@@ -417,7 +420,7 @@ async function runPanel(letter = "A") {
     renderResults(run.answers, run.personas, saved.results, letter === "B" ? "Offer B" : `Panel A · ${run.engine}`);
     const summary = state.summary;
     setTicker(
-      `<span><b>${summary.buys} of ${summary.n} would buy</b> (${pct(summary.rate)}) - ${summary.rate >= summary.bar ? "meets" : "below"} your ${pct(summary.bar)} target.</span>`
+      `<span><b>${summary.buys} of ${summary.n} would buy</b> (${pct(summary.rate)}) - ${summary.rate >= summary.bar ? "meets" : "below"} your ${pct(summary.bar)} target.${summary.topReason ? ` Top reason to pass: <b>${escapeHtml(summary.topReason[0])}</b> (${summary.topReason[1]}).` : ""}</span>`
       + `<button class="ghost" id="tickerResults">See results &darr;</button>`,
       summary.rate >= summary.bar ? "good" : "bad"
     );
@@ -576,7 +579,7 @@ function renderResults(answers, personas, server, title) {
       : topDoubt
         ? `The most common unanswered doubt is <b>"${escapeHtml(topDoubt[0])}"</b> (${topDoubt[1]} buyers). Answer it in <b>offer B</b> and rerun with the same buyers.`
         : `Write a sharper <b>offer B</b> and rerun with the same buyers to see who you win or lose.`;
-  state.summary = { buys, n: answers.length, rate, bar };
+  state.summary = { buys, n: answers.length, rate, bar, topReason: passReasons[0] };
   const meets = rate >= bar;
   $("#tab-results").innerHTML = `
     <div class="headline ${meets ? "good" : "bad"}"><strong>${buys} of ${answers.length} would buy</strong> <span>${pct(rate)} · ${meets ? "meets" : "below"} your ${pct(bar)} target${passReasons[0] ? ` · top reason to pass: <b>${escapeHtml(passReasons[0][0])}</b>` : ""}</span></div>
@@ -821,7 +824,7 @@ async function computeVerdict() {
 $$(".seg").forEach((button) => button.addEventListener("click", () => {
   $$(".seg").forEach((b) => b.classList.toggle("active", b === button));
   state.mode = button.dataset.mode;
-  $("#modeBadge").textContent = { heuristic: "Quick sim · heuristic, not AI", ai: "AI buyers · isolated calls", replay: "Replay · saved panel" }[state.mode];
+  $("#modeBadge").textContent = { heuristic: "Quick sim · rule-based, not AI", ai: "AI buyers · isolated calls", replay: "Replay · saved panel" }[state.mode];
   $("#runBtn").textContent = state.mode === "replay" ? "▶ Replay panel" : "▶ Run panel";
 }));
 $$(".tab").forEach((tab) => tab.addEventListener("click", () => {

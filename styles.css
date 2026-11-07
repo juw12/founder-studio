@@ -365,3 +365,25 @@ details.more > summary em { font-style: normal; font-size: 12px; }
 @media (max-width: 760px) {
   .arena .hint-open { position: absolute; top: auto; bottom: 52px; right: 12px; width: 44px; height: 44px; }
 }
+
+/* ---- /hone round 10: collapsed buyers summary, phone legend overlays the arena ---- */
+.sum-note { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
+details[open] > summary .sum-note { display: none; }
+@media (max-width: 760px) {
+  .arena .legend {
+    position: absolute; order: initial; left: 8px; right: 60px; bottom: 8px; padding: 0;
+    gap: 6px; font-size: 12px; z-index: 2; pointer-events: none;
+  }
+  .arena .legend span { background: #0d1424e6; padding: 2px 7px; }
+  .arena .hint-open { bottom: 8px; right: 8px; }
+}
+
+/* ---- /hone round 11: phone shortcut to the setup form ---- */
+.setup-jump { display: none; }
+@media (max-width: 760px) {
+  .setup-jump {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 11px;
+    border: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 14px;
+  }
+  #setupPanel { scroll-margin-top: 12px; }
+}

@@ -234,8 +234,8 @@ export class Arena {
     this.scene.add(grid);
 
     this.buildStall();
-    this.buyZone = zoneDisc(BUY_COLOR, "BUY", 9, 5, 3.6);
-    this.passZone = zoneDisc(PASS_COLOR, "PASS", -9, 5, 3.6);
+    this.buyZone = zoneDisc(BUY_COLOR, "BUY", 9, 5, 4.4);
+    this.passZone = zoneDisc(PASS_COLOR, "PASS", -9, 5, 4.4);
     this.scene.add(this.buyZone, this.passZone);
     this.selectedId = null;
 
@@ -423,10 +423,10 @@ export class Arena {
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
     const cx = buys ? 9 : -9;
     const columns = this.panelSize > 30 ? 8 : 5;
-    const gap = columns === 8 ? 0.8 : 1.4;
+    const gap = columns === 8 ? 0.95 : 1.7;
     const col = index % columns;
     const row = Math.floor(index / columns);
-    bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, 5 - 1.6 + row * gap));
+    bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, 5 - 2.5 + row * gap));
     const label = this.labels.get(id);
     if (label) {
       label.dataset.state = buys ? "buy" : "pass";
@@ -462,7 +462,7 @@ export class Arena {
     const height = this.renderer.domElement.clientHeight;
     const { offsetLeft, offsetTop } = this.renderer.domElement;
     const projected = new THREE.Vector3();
-    const rank = { thinking: 1, walking: 2 };
+    const rank = { thinking: 1, walking: 2, buy: 3 };
     const candidates = [];
     for (const [id, bot] of this.bots) {
       const label = this.labels.get(id);

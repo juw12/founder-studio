@@ -22,6 +22,7 @@
       <label for="projectSelect" class="sr-only">Project</label>
       <select id="projectSelect"></select>
       <button id="newProjectBtn" class="ghost" title="Start a new project">+ New</button>
+      <a href="#setupPanel" class="setup-jump ghost" title="Edit product, buyers and pitch">⚙ Setup</a>
     </div>
     <div class="mode" role="radiogroup" aria-label="Simulation mode">
       <button data-mode="heuristic" class="seg active" title="Instant, offline rule model. Not AI, not evidence.">Quick sim</button>
@@ -36,7 +37,7 @@
   </header>
 
   <main class="layout">
-    <aside class="setup" aria-label="Setup">
+    <aside id="setupPanel" class="setup" aria-label="Setup">
       <details open>
         <summary><span class="step">1</span> Product & price</summary>
         <label>Business (one line)<input id="business" placeholder="Undanu - digital wedding invitations"></label>
@@ -51,8 +52,8 @@
         </details>
       </details>
 
-      <details open>
-        <summary><span class="step">2</span> Buyers</summary>
+      <details id="buyersSection">
+        <summary><span class="step">2</span> Buyers <span id="buyersSummary" class="sum-note"></span></summary>
         <div class="list-head"><span>Segments</span><button class="mini" data-add="segments">+ add</button></div>
         <div class="cols-hint" aria-hidden="true"><span>share of buyers (0-1)</span><span>income from</span><span>income to</span></div>
         <div id="segments" class="rows"></div>
@@ -113,7 +114,7 @@
           </div>
         </div>
         <div class="badges">
-          <span id="modeBadge" class="badge">Quick sim · heuristic</span>
+          <span id="modeBadge" class="badge">Quick sim · rule-based, not AI</span>
           <span class="badge warn">Simulated buyers · upper bound, not customers</span>
         </div>
         <div id="ticker" class="ticker" aria-live="polite" hidden></div>
