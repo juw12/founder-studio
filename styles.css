@@ -352,3 +352,16 @@ details.more > summary em { font-style: normal; font-size: 12px; }
   #skipBtn .long { display: none; }
   #runBtn { white-space: nowrap; }
 }
+
+/* ---- /hone round 7: thinking labels stand out, reopenable hint, modes explained ---- */
+.bot-label[data-state="thinking"] { background: #3a2a07; color: #ffe2a3; font-weight: 600; }
+.modes-note { margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.modes-note b { color: var(--text); }
+.hint-open {
+  position: absolute; right: 12px; bottom: 10px; z-index: 3; width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--line); background: #0d1424e6; color: var(--text); font-weight: 700; cursor: pointer;
+}
+.hint-open:hover { border-color: var(--accent); }
+@media (max-width: 760px) {
+  .arena .hint-open { position: absolute; top: auto; bottom: 52px; right: 12px; width: 44px; height: 44px; }
+}

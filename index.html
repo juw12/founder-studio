@@ -122,6 +122,7 @@
           <button class="hint-close" id="hintClose" aria-label="Hide this tip">&times;</button>
         </div>
         <div id="legend" class="legend"></div>
+        <button id="hintOpen" class="hint-open" type="button" aria-label="How the arena works" title="How the arena works">?</button>
         <div id="toast" class="toast" hidden></div>
       </div>
 
@@ -142,6 +143,7 @@
             <li>Each buyer walks to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>; the reason appears in Live decisions.</li>
             <li>Results then show who buys by segment, why the rest pass, and the next test to run.</li>
           </ol>
+          <p class="modes-note"><b>Quick sim</b> = instant rule model, free, not AI. <b>AI buyers</b> = one isolated model call per buyer. <b>Replay</b> = re-watch a saved panel. All are simulations, not customers.</p>
         </div></section>
         <section id="tab-pricing" class="panel"><p class="empty">Price answers appear here as bots decide (live preview), then the skill's van_westendorp.py result.</p></section>
         <section id="tab-numbers" class="panel"></section>

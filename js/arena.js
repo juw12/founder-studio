@@ -107,7 +107,7 @@ class Bot {
     this.bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), this.bulbMaterial);
     this.bulb.position.y = 2.0;
     this.ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.58, 0.07, 10, 48, Math.PI * 1.4),
+      new THREE.TorusGeometry(0.66, 0.09, 10, 48, Math.PI * 1.5),
       new THREE.MeshBasicMaterial({ color: THINK_COLOR, transparent: true, opacity: 0.95 })
     );
     this.ring.position.y = 2.35;
@@ -423,7 +423,7 @@ export class Arena {
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
     const cx = buys ? 9 : -9;
     const columns = this.panelSize > 30 ? 8 : 5;
-    const gap = columns === 8 ? 0.8 : 1.25;
+    const gap = columns === 8 ? 0.8 : 1.4;
     const col = index % columns;
     const row = Math.floor(index / columns);
     bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, 5 - 1.6 + row * gap));
@@ -479,16 +479,31 @@ export class Arena {
       }
       candidates.push({
         label,
+        bot,
         priority: selected ? 0 : rank[bot.state],
         x: offsetLeft + ((projected.x + 1) / 2) * width,
         y: offsetTop + ((1 - projected.y) / 2) * height,
       });
     }
+    // The stall sign is reserved space; labels never sit on top of it.
+    const toScreen = (x, y, z) => {
+      projected.set(x, y, z).project(this.camera);
+      return [offsetLeft + ((projected.x + 1) / 2) * width, offsetTop + ((1 - projected.y) / 2) * height];
+    };
+    const [signLeft, signTop] = toScreen(-2.5, 4.45, -0.3);
+    const [signRight, signBottom] = toScreen(2.5, 1.95, -0.3);
+    const onSign = (x, y) => x + 40 > signLeft && x - 40 < signRight && y > signTop && y - 22 < signBottom;
     // Hide a label when a higher-priority one already sits on the same spot.
     candidates.sort((a, b) => a.priority - b.priority);
     const placed = [];
+    const clashes = (x, y) => onSign(x, y) || placed.some((p) => Math.abs(p.x - x) < 64 && Math.abs(p.y - y) < 26);
     for (const item of candidates) {
-      const clash = placed.some((p) => Math.abs(p.x - item.x) < 64 && Math.abs(p.y - item.y) < 26);
+      if (clashes(item.x, item.y)) {
+        const [footX, footY] = toScreen(item.bot.group.position.x, -0.1, item.bot.group.position.z);
+        item.x = footX;
+        item.y = footY + 26;
+      }
+      const clash = clashes(item.x, item.y);
       item.label.style.display = clash ? "none" : "block";
       if (clash) continue;
       placed.push(item);

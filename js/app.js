@@ -872,6 +872,10 @@ loadProjects().then(async () => {
   if (params.get("autorun")) await runPanel("A");
 }).catch((error) => toast(`Could not load projects: ${error.message}`, true, 10000));
 
+document.getElementById("hintOpen")?.addEventListener("click", () => {
+  localStorage.removeItem("studio:hintSeen");
+  document.getElementById("arenaHint").hidden = false;
+});
 document.getElementById("hintClose")?.addEventListener("click", () => {
   localStorage.setItem("studio:hintSeen", "1");
   document.getElementById("arenaHint").hidden = true;
