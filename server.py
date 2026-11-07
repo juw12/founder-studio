@@ -17,6 +17,8 @@ import os
 import re
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +27,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,60}$")
 VARIANT_RE = re.compile(r"^panel(-[a-z0-9-]{1,40})?$")
+WRITE_LOCK = threading.Lock()
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -105,11 +108,22 @@ class Studio:
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     @staticmethod
-    def write(path, content):
+    def retry_busy(action, attempts=6):
+        """Run a file action, retrying briefly while Windows reports the file is in use."""
+        for attempt in range(attempts):
+            try:
+                return action()
+            except PermissionError:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(0.1 * (attempt + 1))
+
+    @classmethod
+    def write(cls, path, content):
         path.parent.mkdir(parents=True, exist_ok=True)
         if not isinstance(content, str):
             content = json.dumps(content, ensure_ascii=False, indent=2)
-        path.write_text(content, encoding="utf-8")
+        cls.retry_busy(lambda: path.write_text(content, encoding="utf-8"))
 
     def panel_dir(self, folder, variant):
         variant = variant or "panel"
@@ -180,7 +194,7 @@ class Studio:
             self.write(folder / "competitors.md", body["competitors"])
         if panel.exists():
             for old in list((panel / "answers").glob("*.json")) if (panel / "answers").exists() else []:
-                old.unlink()
+                self.retry_busy(lambda: old.unlink(missing_ok=True))
         args = ["--dir", panel, "init", "--customer", folder / "customer.json", "--pitch", pitch_file, "--n", int(body.get("n", 20))]
         if body.get("seed"):
             args += ["--seed", int(body["seed"])]
@@ -337,7 +351,13 @@ def make_handler(studio):
                 handler = routes.get(self.path)
                 if not handler:
                     return self.send_json(404, {"error": "unknown endpoint"})
-                return self.send_json(200, handler(body))
+                if self.path == "/api/llm":
+                    return self.send_json(200, handler(body))
+                # Runs that write project files go one at a time, so two tabs can't collide on a file.
+                with WRITE_LOCK:
+                    return self.send_json(200, handler(body))
+            except PermissionError:
+                return self.send_json(409, {"error": "Project files were busy (another run was saving). Run again in a moment."})
             except (ValueError, FileNotFoundError, KeyError) as error:
                 return self.send_json(400, {"error": str(error)})
             except Exception as error:

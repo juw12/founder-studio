@@ -7,7 +7,8 @@ import {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const params = new URLSearchParams(location.search);
-const SEGMENT_HEX = ["#6ea8fe", "#f4a259", "#b084f5", "#5cc8a7", "#f06595", "#ffd43b"];
+// Segment colours come from the CSS design tokens so the legend, feed dots and 3D bots always match.
+const SEGMENT_HEX = [1, 2, 3, 4, 5, 6].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--seg-${i}`).trim() || "#475569");
 const REASONS = ["price", "habit", "need", "trust", "quality", "convenience", "timing", "values", "other"];
 
 const state = {
@@ -26,7 +27,8 @@ const state = {
   selected: null,
 };
 // Waits that "Skip to results" can cut short.
-const pause = (ms) => (state.skip ? Promise.resolve() : sleep(ms));
+// A zero-delay timer (not a resolved promise) so an instant run still lets the browser breathe.
+const pause = (ms) => (state.skip ? sleep(0) : sleep(ms));
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -49,6 +51,14 @@ async function api(path, body) {
   const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
   if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
   return data;
+}
+
+// Never show raw OS errors or local file paths to the user.
+function friendlyError(message = "") {
+  if (/WinError|being used by another process|Permission denied|EACCES|EBUSY/i.test(message)) {
+    return "Project files were busy (another run was saving). Run again in a moment.";
+  }
+  return message.replace(/[A-Za-z]:\\[^\s'"]+|\/(?:Users|home)\/[^\s'"]+/g, "a project file");
 }
 
 function toast(message, isError = false, ms = 4200) {
@@ -158,6 +168,15 @@ function priceLabel() {
 }
 
 // ---------------- setup editor ----------------
+// Step 1 shows a one-line summary and starts collapsed once business and price are filled.
+function updateProductSummary(setOpenState = false) {
+  const business = $("#business").value.trim();
+  const price = $("#price").value;
+  const shortName = business.split(/[(\-–—,]/)[0].trim().slice(0, 28);
+  $("#productSummary").textContent = business && price ? `${shortName} · ${priceLabel()} · edit` : "";
+  if (setOpenState) $("#productSection").open = !(business && price);
+}
+
 function renderSetup() {
   const c = state.customer;
   $("#business").value = c.business || "";
@@ -166,6 +185,7 @@ function renderSetup() {
   const segmentCount = (c.segments || []).length;
   $("#buyersSummary").textContent = `${segmentCount} segment${segmentCount === 1 ? "" : "s"} · ${$("#panelSize").value || 0} buyers · edit`;
   if (!segmentCount) $("#buyersSection").open = true;
+  updateProductSummary(true);
   $("#segments").innerHTML = (c.segments || []).map((s, i) => `
     <div class="item" data-i="${i}">
       <button class="del" data-del="segments" data-i="${i}" title="Remove">×</button>
@@ -193,7 +213,7 @@ function renderObjections() {
   $("#objections").innerHTML = objections.map((o, i) => {
     const on = state.addressed[o] ?? suggested[o];
     return `<span class="chip ${on ? "on" : ""}" data-obj="${i}" title="${on ? "Pitch answers this" : "Pitch does not answer this"}">
-      ${on ? "✓" : "○"} <input data-objtext="${i}" value="${escapeHtml(o)}"><span class="x" data-delobj="${i}">×</span></span>`;
+      <span class="tick${on ? " on" : ""}" aria-hidden="true"></span> <input data-objtext="${i}" value="${escapeHtml(o)}"><span class="x" data-delobj="${i}">×</span></span>`;
   }).join("");
 }
 
@@ -288,8 +308,14 @@ function updateHud(answers, total, status) {
   if (hint) hint.hidden = total > 0 || localStorage.getItem("studio:hintSeen") === "1";
   const buys = answers.filter((a) => a.buys).length;
   const done = answers.length;
-  $("#progressText").textContent = `${done}/${total}`;
-  $("#stateText").textContent = status;
+  const planned = total || Number($("#panelSize").value) || 0;
+  $("#progressText").textContent = `${done}/${planned}`;
+  $("#stateText").textContent = total ? status : "not started";
+  $("#hudSource").textContent = {
+    heuristic: "source: Quick sim",
+    ai: "source: AI model",
+    replay: "source: saved panel",
+  }[state.mode] || "";
   $("#progressArc").style.strokeDasharray = `${total ? (done / total) * 100 : 0} 100`;
   $("#buyCount").textContent = buys;
   $("#passCount").textContent = done - buys;
@@ -328,6 +354,10 @@ function feedItem(persona, answer, status) {
     item.addEventListener("mouseleave", () => arena.highlight(state.selected));
     $("#feedList").prepend(item);
   }
+  if (status !== "thinking" && answer) {
+    for (const row of $$("#feedList li.latest")) row.classList.remove("latest");
+    item.classList.add("latest");
+  }
   const tag = status === "thinking" ? '<span class="tag think">thinking</span>'
     : answer?.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>';
   if (status !== "thinking" && answer) {
@@ -347,6 +377,12 @@ function selectBot(id) {
   const answer = run.answers.find((a) => a.id === id);
   state.selected = id;
   arena.highlight(id);
+  // Link the 3D bot and its feed entry both ways.
+  for (const entry of $$("#feedList li")) {
+    const isSelected = entry.dataset.id === id;
+    entry.classList.toggle("selected", isSelected);
+    if (isSelected) entry.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
   const card = $("#botCard");
   card.hidden = false;
   card.innerHTML = `<h4>${escapeHtml(persona.name)} · ${escapeHtml(persona.age)}</h4>
@@ -388,6 +424,7 @@ async function runPanel(letter = "A") {
     toast("No model set: using server defaults (OPENAI_API_KEY / gpt-4o-mini).", false);
   }
   state.running = true;
+  document.documentElement.dataset.run = "running";
   state.skip = params.get("skip") === "1";
   $("#runBtn").disabled = true;
   $("#runAbBtn").disabled = true;
@@ -421,14 +458,15 @@ async function runPanel(letter = "A") {
     const summary = state.summary;
     setTicker(
       `<span><b>${summary.buys} of ${summary.n} would buy</b> (${pct(summary.rate)}) - ${summary.rate >= summary.bar ? "meets" : "below"} your ${pct(summary.bar)} target.${summary.topReason ? ` Top reason to pass: <b>${escapeHtml(summary.topReason[0])}</b> (${summary.topReason[1]}).` : ""}</span>`
-      + `<button class="ghost" id="tickerResults">See results &darr;</button>`,
+      + `<button class="ghost" id="tickerResults">See results</button>`,
       summary.rate >= summary.bar ? "good" : "bad"
     );
     renderPricing(run.answers, saved.pricing);
     if (letter === "B") renderAb();
-    toast(`${saved.results?.buys ?? run.answers.filter((a) => a.buys).length}/${run.personas.length} buy · checked by panel.py`);
+    document.documentElement.dataset.run = "done";
   } catch (error) {
-    toast(error.message, true, 8000);
+    document.documentElement.dataset.run = "stopped";
+    toast(friendlyError(error.message), true, 8000);
     updateHud(state.current?.answers || [], state.current?.personas.length || 0, "stopped");
   } finally {
     state.running = false;
@@ -576,18 +614,37 @@ function renderResults(answers, personas, server, title) {
   const nextTest = !answers.length ? ""
     : topCode === "price"
       ? `Price is the top reason to pass. Open <b>Pricing</b> for the acceptable range, then test a cheaper or better-justified offer as <b>offer B</b> with the same buyers.`
+      : topCode === "need" && topDoubt
+        ? `Most buyers pass on <b>need</b>: they don't see a reason to change their habit. In <b>offer B</b>, open with the one moment your product beats what they do today, and answer their top doubt <b>"${escapeHtml(topDoubt[0])}"</b> (${topDoubt[1]} buyers). Rerun with the same buyers.`
       : topDoubt
         ? `The most common unanswered doubt is <b>"${escapeHtml(topDoubt[0])}"</b> (${topDoubt[1]} buyers). Answer it in <b>offer B</b> and rerun with the same buyers.`
         : `Write a sharper <b>offer B</b> and rerun with the same buyers to see who you win or lose.`;
+  const priceCount = passReasons.find(([code]) => code === "price")?.[1] || 0;
+  const localCurve = vanWestendorp(answers);
+  const priceRange = state.current?.serverPricing?.range || (localCurve ? [localCurve.points.PMC, localCurve.points.PME] : null);
+  const yourPrice = Number($("#price").value) || 0;
+  // Price lever: only suggest a price change when the price sits outside the simulated acceptable range.
+  const rangeText = priceRange?.[0] && priceRange?.[1] ? `${fmt(priceRange[0])} to ${fmt(priceRange[1])}` : "";
+  const stopsText = `Price also stops <b>${priceCount}</b> buyer${priceCount === 1 ? "" : "s"}`;
+  let priceLever = "";
+  if (topCode !== "price" && priceCount && rangeText) {
+    if (yourPrice > priceRange[1]) {
+      priceLever = ` ${stopsText}, and ${fmt(yourPrice)} is above the simulated acceptable range (${rangeText}): also try <b>${fmt(priceRange[1])}</b>.`;
+    } else if (yourPrice < priceRange[0]) {
+      priceLever = ` ${stopsText}; ${fmt(yourPrice)} is below the simulated acceptable range (${rangeText}), so a low price may read as low quality.`;
+    } else {
+      priceLever = ` ${stopsText}, but ${fmt(yourPrice)} sits inside the simulated acceptable range (${rangeText}), so fix the message before the price.`;
+    }
+  }
   state.summary = { buys, n: answers.length, rate, bar, topReason: passReasons[0] };
   const meets = rate >= bar;
   $("#tab-results").innerHTML = `
     <div class="headline ${meets ? "good" : "bad"}"><strong>${buys} of ${answers.length} would buy</strong> <span>${pct(rate)} · ${meets ? "meets" : "below"} your ${pct(bar)} target${passReasons[0] ? ` · top reason to pass: <b>${escapeHtml(passReasons[0][0])}</b>` : ""}</span></div>
     <p class="source-line">Source: ${escapeHtml(source)}. Simulated buyers are an upper bound, not customers.</p>
-    ${nextTest ? `<div class="next-test"><strong>Next test</strong><span>${nextTest}</span><button class="ghost" id="goAbBtn">Write offer B &rarr;</button></div>` : ""}
+    ${nextTest ? `<div class="next-test"><strong>Next test</strong><span>${nextTest}${priceLever}</span><button class="ghost" id="goAbBtn">Write offer B</button></div>` : ""}
     <div class="cards">
-      <div class="card"><small>${escapeHtml(title)}</small><strong>${buys}/${answers.length} buy</strong><span class="sub">${pct(rate)} · bar ${pct(bar)} ${rate >= bar ? "✓" : "✗"}</span></div>
-      <div class="card"><small>Check</small><strong style="font-size:15px">${server ? '<span class="verified">✓ tallied by panel.py</span>' : '<span class="preview">live preview</span>'}</strong><span class="sub">${escapeHtml(state.current?.engine || "")}</span></div>
+      <div class="card"><small>${escapeHtml(title)}</small><strong>${buys}/${answers.length} buy</strong><span class="sub">${pct(rate)} · target ${pct(bar)} ${rate >= bar ? "met" : "not met"}</span></div>
+      <div class="card"><small>Check</small><strong style="font-size:15px">${server ? '<span class="verified">Verified by panel.py</span>' : '<span class="preview">live preview</span>'}</strong><span class="sub">${escapeHtml(state.current?.engine || "")}</span></div>
       <div class="card"><small>Top pass reason</small><strong style="font-size:17px">${escapeHtml(passReasons[0]?.[0] || "–")}</strong><span class="sub">${passReasons[0]?.[1] || 0} buyers</span></div>
     </div>
     ${canPromote ? '<p><button id="promoteBtn" class="ghost">Make this AI run the official panel (used by the verdict)</button></p>' : ""}
@@ -635,20 +692,20 @@ function renderPricing(answers, serverPricing) {
     <text x="${x(value) + 4}" y="${P + 4}" fill="${color}" font-size="11">${label} ${fmt(value)}</text>`;
   $("#tab-pricing").innerHTML = `
     <div class="cards">
-      <div class="card"><small>Acceptable range</small><strong>${fmt(range[0])} – ${fmt(range[1])}</strong><span class="sub">${serverPricing && !serverPricing.error ? '<span class="verified">✓ van_westendorp.py</span>' : '<span class="preview">live preview</span>'}</span></div>
+      <div class="card"><small>Acceptable range</small><strong>${fmt(range[0])} – ${fmt(range[1])}</strong><span class="sub">${serverPricing && !serverPricing.error ? '<span class="verified">Verified by van_westendorp.py</span>' : '<span class="preview">live preview</span>'}</span></div>
       <div class="card"><small>Optimal (OPP)</small><strong>${fmt(points.OPP)}</strong></div>
       <div class="card"><small>Indifference (IPP)</small><strong>${fmt(points.IPP)}</strong></div>
       <div class="card"><small>Your price</small><strong>${fmt(price)}</strong><span class="sub">${price && range[1] && price > range[1] ? "above the range" : price && range[0] && price < range[0] ? "below the range" : "inside the range"}</span></div>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;background:#0f1526;border-radius:12px;border:1px solid #232c45">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;background:var(--panel);border-radius:10px;border:1px solid var(--line)">
       <rect x="${x(range[0] ?? min)}" y="${P - 6}" width="${Math.max(0, x(range[1] ?? min) - x(range[0] ?? min))}" height="${H - 2 * P + 12}" fill="#37d67a14"/>
       ${line(curve.curves.tooCheap, "#ff5d73", "6 4")}${line(curve.curves.cheap, "#f4a259")}
-      ${line(curve.curves.expensive, "#6ea8fe")}${line(curve.curves.tooExpensive, "#b084f5", "6 4")}
+      ${line(curve.curves.expensive, "#6ea8fe")}${line(curve.curves.tooExpensive, "#2dd4bf", "6 4")}
       ${marker("OPP", points.OPP, "#e8ecf6")}${marker("IPP", points.IPP, "#94a0bb")}
       ${price ? `<line x1="${x(Math.min(max, Math.max(min, price)))}" x2="${x(Math.min(max, Math.max(min, price)))}" y1="${P - 6}" y2="${H - P + 6}" stroke="#ffc94d" stroke-width="2"/><text x="${x(Math.min(max, Math.max(min, price))) + 4}" y="${H - P - 4}" fill="#ffc94d" font-size="11">your price</text>` : ""}
       <text x="${P}" y="${H - 8}" fill="#94a0bb" font-size="11">${fmt(min)}</text><text x="${W - P - 40}" y="${H - 8}" fill="#94a0bb" font-size="11">${fmt(max)}</text>
     </svg>
-    <p class="hint"><span style="color:#ff5d73">too cheap</span> · <span style="color:#f4a259">cheap</span> · <span style="color:#6ea8fe">expensive</span> · <span style="color:#b084f5">too expensive</span>. Green band = acceptable range. Simulated answers; real surveys beat this.</p>`;
+    <p class="hint"><span style="color:#ff5d73">too cheap</span> · <span style="color:#f4a259">cheap</span> · <span style="color:#6ea8fe">expensive</span> · <span style="color:#2dd4bf">too expensive</span>. Green band = acceptable range. Simulated answers; real surveys beat this.</p>`;
 }
 
 // ---------------- numbers ----------------
@@ -704,7 +761,7 @@ async function runCfo() {
         <div class="card"><small>Year-1 profit</small><strong>${fmt(c.year1_profit)}</strong><span class="sub">after startup ${fmt(c.year1_after_startup)}</span></div>
         <div class="card"><small>Payback</small><strong>${c.payback_month ? `month ${c.payback_month}` : "not in year 1"}</strong><span class="sub">cash needed ${fmt(c.cash_needed)}</span></div>
       </div>
-      ${c.flags.length ? `<h3>Red flags</h3><ul class="quotes">${c.flags.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>` : '<p class="verified">✓ No red flags from unit_economics.py (only as good as the inputs).</p>'}
+      ${c.flags.length ? `<h3>Red flags</h3><ul class="quotes">${c.flags.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>` : '<p class="verified">No red flags from unit_economics.py (only as good as the inputs).</p>'}
       <h3>What-ifs</h3><table><tr><th>Scenario</th><th>Year-1 profit</th><th>Payback</th></tr>
       ${Object.entries(out.what_ifs).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${fmt(v.year1_profit)}</td><td>${v.payback_month ? `month ${v.payback_month}` : "–"}</td></tr>`).join("")}</table>`;
   } catch (error) {
@@ -754,7 +811,7 @@ function renderCompetitors() {
       <div>
         <h3>Beat-them board</h3>
         <p class="hint">Objections your pitch doesn't answer yet. Each is a gap a competitor can use, or a feature/offer you can add.</p>
-        <ul class="quotes">${unanswered.map((o) => `<li>○ ${escapeHtml(o)}</li>`).join("") || "<li>✓ Every listed objection is answered by the pitch.</li>"}</ul>
+        <ul class="quotes">${unanswered.map((o) => `<li>${escapeHtml(o)}</li>`).join("") || "<li>Every listed objection is answered by the pitch.</li>"}</ul>
         <div class="md">${markdown(state.competitors)}</div>
       </div>
     </div>`;
@@ -811,7 +868,7 @@ async function computeVerdict() {
     const verdict = (lines[0] || "").replace("Verdict:", "").trim();
     $("#verdictOut").innerHTML = `
       <div class="verdict-big ${/profitable/i.test(verdict) ? "good" : "bad"}">${escapeHtml(verdict || "?")}</div>
-      ${lines.slice(1).map((l) => `<div class="check-line ${l.includes("✓") ? "ok" : "no"}">${escapeHtml(l.trim())}</div>`).join("")}
+      ${lines.slice(1).map((l) => `<div class="check-line ${l.includes("✓") ? "ok" : "no"}">${escapeHtml(l.trim().replace(/^[✓✗×]\s*/, ""))}</div>`).join("")}
       <div class="next-test"><strong>Next test</strong><span>${escapeHtml(nextTestFor(verdict, lines.slice(1)))}</span></div>
       <p class="hint">Computed by compile.py from numbers.json and the official panel (panel/results.json). Quick-sim runs never count.</p>
       <details><summary>business-plan.md</summary><div class="md">${markdown(out.plan || "")}</div></details>`;
@@ -824,8 +881,13 @@ async function computeVerdict() {
 $$(".seg").forEach((button) => button.addEventListener("click", () => {
   $$(".seg").forEach((b) => b.classList.toggle("active", b === button));
   state.mode = button.dataset.mode;
-  $("#modeBadge").textContent = { heuristic: "Quick sim · rule-based, not AI", ai: "AI buyers · isolated calls", replay: "Replay · saved panel" }[state.mode];
-  $("#runBtn").textContent = state.mode === "replay" ? "▶ Replay panel" : "▶ Run panel";
+  $("#modeBadge").textContent = { heuristic: "Quick sim · rules, not AI", ai: "AI buyers · isolated calls", replay: "Replay · saved panel" }[state.mode];
+  updateHud(state.current?.answers || [], state.current?.personas.length || 0, $("#stateText").textContent);
+  $("#runBtn").textContent = state.mode === "replay" ? "Replay panel" : "Run panel";
+  // The AI model settings only matter in AI mode; keep first-run setup short otherwise.
+  const aiSection = $("#aiSection");
+  aiSection.hidden = state.mode !== "ai";
+  if (state.mode === "ai") aiSection.open = true;
 }));
 $$(".tab").forEach((tab) => tab.addEventListener("click", () => {
   $$(".tab").forEach((t) => t.classList.toggle("active", t === tab));
@@ -883,3 +945,7 @@ document.getElementById("hintClose")?.addEventListener("click", () => {
   localStorage.setItem("studio:hintSeen", "1");
   document.getElementById("arenaHint").hidden = true;
 });
+
+for (const fieldId of ["business", "price"]) {
+  document.getElementById(fieldId)?.addEventListener("input", () => updateProductSummary());
+}
