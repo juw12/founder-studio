@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.log
+# runs you make locally stay local
+projects/*/panel*/
+projects/*/pitch-panel*.md
+projects/*/business-plan.md
+projects/*/cfo.md
+projects/*/pricing-curve.md
