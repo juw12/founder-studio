@@ -91,7 +91,7 @@ def test_folder_of_projects(workspace):
     official.write_text('{"buys": 9, "passes": 11, "answered": 20, "buy_rate": 0.45}', encoding="utf-8")
     official_before = official.read_text(encoding="utf-8")
 
-    process, base = start_server(root, 8791)
+    process, base = start_server(root, 18791)
     call, status_of = make_caller(base)
     try:
         statics = {p: status_of(p) for p in ["/", "/styles.css", "/js/app.js", "/js/arena.js", "/vendor/three.module.min.js"]}
@@ -142,7 +142,7 @@ def test_folder_of_projects(workspace):
 def test_single_founder_folder(workspace):
     founder = workspace / "my-cafe-idea" / "founder"
     shutil.copytree(DEMO, founder)
-    process, base = start_server(founder, 8792)
+    process, base = start_server(founder, 18792)
     call, _ = make_caller(base)
     try:
         code, projects = call("/api/projects")
@@ -157,7 +157,9 @@ def test_single_founder_folder(workspace):
 def test_no_panel_is_incomplete(workspace):
     founder = workspace / "numbers-only" / "founder"
     shutil.copytree(DEMO, founder)
-    tools = APP / "tools"
+    sys.path.insert(0, str(APP))
+    import server  # same tool lookup as the app: bundled tools/, then the skill's tools/
+    tools = server.default_tools_dir()
     completed = subprocess.run(
         [sys.executable, str(tools / "compile.py"), "--dir", str(founder), "--check"],
         capture_output=True, text=True, encoding="utf-8",
