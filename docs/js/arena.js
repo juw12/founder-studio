@@ -1,12 +1,31 @@
 // Founder Studio - live 3D arena of buyer bots (three.js r160).
 import * as THREE from "../vendor/three.module.min.js";
 
-const SEGMENT_COLORS = [0x6ea8fe, 0xf4a259, 0xb084f5, 0x5cc8a7, 0xf06595, 0xffd43b];
-const BUY_COLOR = 0x37d67a;
-const PASS_COLOR = 0xff5d73;
-const THINK_COLOR = 0xffc94d;
+// Every scene colour comes from the CSS design tokens (styles.css :root), so one token set themes page and arena.
+const rootStyle = getComputedStyle(document.documentElement);
+const token = (name, fallback) => rootStyle.getPropertyValue(name).trim() || fallback;
+const tokenHex = (name, fallback) => parseInt(token(name, fallback).replace("#", ""), 16);
+const THEME = {
+  sceneBg: tokenHex("--scene-bg", "#eef1f5"),
+  floor: tokenHex("--scene-floor", "#e4e8ee"),
+  grid: tokenHex("--scene-grid", "#c9d0da"),
+  gridMinor: tokenHex("--scene-grid-minor", "#d9dee5"),
+  stall: tokenHex("--scene-stall", "#cbd3de"),
+  stallTop: tokenHex("--scene-stall-top", "#9aa6b6"),
+  accent: tokenHex("--accent", "#1d4ed8"),
+  sky: tokenHex("--scene-sky", "#ffffff"),
+  ground: tokenHex("--scene-ground", "#b9c1cc"),
+  labelBg: token("--scene-label-bg", "rgba(255,255,255,0.96)"),
+  labelFg: token("--scene-label-fg", "#14181f"),
+  labelSub: token("--scene-label-sub", "#4b5563"),
+  font: token("--font-ui", "Segoe UI, Arial, sans-serif"),
+};
+const SEGMENT_COLORS = [1, 2, 3, 4, 5, 6].map((i) => tokenHex(`--seg-${i}`, "#475569"));
+const BUY_COLOR = tokenHex("--buy", "#15803d");
+const PASS_COLOR = tokenHex("--pass", "#c0262d");
+const THINK_COLOR = tokenHex("--think", "#b45309");
 
-function labelTexture(lines, { width = 512, height = 256, bg = "rgba(13,17,28,0.92)", fg = "#e8ecf6", accent = "#7aa2ff", big = false } = {}) {
+function labelTexture(lines, { width = 512, height = 256, bg = THEME.labelBg, fg = THEME.labelFg, accent = "#" + THEME.accent.toString(16).padStart(6, "0"), big = false } = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -23,7 +42,7 @@ function labelTexture(lines, { width = 512, height = 256, bg = "rgba(13,17,28,0.
   ctx.textAlign = "center";
   if (big) {
     ctx.textBaseline = "middle";
-    ctx.font = "bold 120px Inter, Segoe UI, sans-serif";
+    ctx.font = `600 120px ${THEME.font}`;
     ctx.fillStyle = accent;
     ctx.fillText(lines[0], width / 2, height / 2 + 6, width - 40);
     const bigTexture = new THREE.CanvasTexture(canvas);
@@ -32,8 +51,8 @@ function labelTexture(lines, { width = 512, height = 256, bg = "rgba(13,17,28,0.
     return bigTexture;
   }
   lines.forEach((line, i) => {
-    ctx.font = i === 0 ? "bold 52px Inter, Segoe UI, sans-serif" : "32px Inter, Segoe UI, sans-serif";
-    ctx.fillStyle = i === 0 ? fg : "#aab4cc";
+    ctx.font = i === 0 ? `600 52px ${THEME.font}` : `32px ${THEME.font}`;
+    ctx.fillStyle = i === 0 ? fg : THEME.labelSub;
     ctx.fillText(line, width / 2, 90 + i * 64, width - 40);
   });
   const texture = new THREE.CanvasTexture(canvas);
@@ -62,7 +81,7 @@ function zoneDisc(color, label, x, z, radius) {
     transparent: true,
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), signMaterial);
-  sign.position.set(0, 3.5, -radius - 0.2);
+  sign.position.set(0, 2.6, -radius - 0.2);
   group.add(disc, ring, sign);
   group.position.set(x, 0, z);
   // Redraws the sign with a live count, e.g. "BUY · 4".
@@ -209,27 +228,27 @@ export class Arena {
     container.appendChild(this.labelLayer);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0b0f1a);
-    this.scene.fog = new THREE.Fog(0x0b0f1a, 28, 60);
+    this.scene.background = new THREE.Color(THEME.sceneBg);
+    this.scene.fog = new THREE.Fog(THEME.sceneBg, 28, 60);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
     this.orbit = { azimuth: 0.0, elevation: 0.62, radius: 24, target: new THREE.Vector3(0, 1.4, 1.5) };
     this.updateCamera();
 
-    this.scene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1f2e, 0.9));
+    this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 0.9));
     const sun = new THREE.DirectionalLight(0xffffff, 1.2);
     sun.position.set(6, 14, 8);
     this.scene.add(sun);
-    const rim = new THREE.PointLight(0x7aa2ff, 30, 30);
+    const rim = new THREE.PointLight(THEME.accent, 12, 30);
     rim.position.set(0, 5, -4);
     this.scene.add(rim);
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(40, 96),
-      new THREE.MeshStandardMaterial({ color: 0x121829, roughness: 0.95 })
+      new THREE.MeshStandardMaterial({ color: THEME.floor, roughness: 0.95 })
     );
     ground.rotation.x = -Math.PI / 2;
     this.scene.add(ground);
-    const grid = new THREE.GridHelper(80, 80, 0x26304a, 0x1a2135);
+    const grid = new THREE.GridHelper(80, 80, THEME.grid, THEME.gridMinor);
     grid.position.y = 0.005;
     this.scene.add(grid);
 
@@ -238,6 +257,7 @@ export class Arena {
     this.passZone = zoneDisc(PASS_COLOR, "PASS", -9, 5, 4.4);
     this.scene.add(this.buyZone, this.passZone);
     this.selectedId = null;
+    this.lastDecidedId = null;
 
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -251,18 +271,18 @@ export class Arena {
     this.stall = new THREE.Group();
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(2.3, 2.5, 0.25, 48),
-      new THREE.MeshStandardMaterial({ color: 0x1d2640, roughness: 0.6, metalness: 0.2 })
+      new THREE.MeshStandardMaterial({ color: THEME.stall, roughness: 0.6, metalness: 0.1 })
     );
     base.position.y = 0.12;
     const glow = new THREE.Mesh(
       new THREE.RingGeometry(2.45, 2.6, 96),
-      new THREE.MeshBasicMaterial({ color: 0x7aa2ff, transparent: true, opacity: 0.8 })
+      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.8 })
     );
     glow.rotation.x = -Math.PI / 2;
     glow.position.y = 0.26;
     const counter = new THREE.Mesh(
       new THREE.BoxGeometry(2.6, 1.0, 1.0),
-      new THREE.MeshStandardMaterial({ color: 0x2b3658, roughness: 0.4, metalness: 0.3 })
+      new THREE.MeshStandardMaterial({ color: THEME.stallTop, roughness: 0.4, metalness: 0.1 })
     );
     counter.position.set(0, 0.75, 0);
     const pole = new THREE.Mesh(
@@ -351,6 +371,9 @@ export class Arena {
     this.camera.aspect = clientWidth / clientHeight;
     // Keep both decision zones (x = +/-12.6) in frame on narrow screens.
     this.orbit.radius = Math.min(40, Math.max(24, 24 * (1.45 / this.camera.aspect)));
+    // On phone-width canvases look further forward so the zones fill the frame
+    // instead of leaving empty floor above them.
+    this.orbit.target.z = clientWidth < 600 ? 6 : 1.5;
     this.updateCamera();
     this.camera.updateProjectionMatrix();
   }
@@ -364,6 +387,7 @@ export class Arena {
     this.passSlots = 0;
     this.stallSlots = 0;
     this.selectedId = null;
+    this.lastDecidedId = null;
     this.buyZone.userData.setCount(0);
     this.passZone.userData.setCount(0);
   }
@@ -379,7 +403,12 @@ export class Arena {
     this.bots.set(persona.id, bot);
     const label = document.createElement("div");
     label.className = "bot-label";
-    label.textContent = persona.name || persona.id;
+    const name = persona.name || persona.id;
+    // Decided bots in a pile show a 2-letter chip; hover, select or a feed hover expands it to the name.
+    label.innerHTML = `<span class="ini"></span><span class="nm"></span>`;
+    label.querySelector(".ini").textContent = name.slice(0, 2);
+    label.querySelector(".nm").textContent = name;
+    label.setAttribute("aria-label", name);
     label.addEventListener("click", () => this.onSelect?.(persona.id));
     this.labelLayer.appendChild(label);
     this.labels.set(persona.id, label);
@@ -419,6 +448,7 @@ export class Arena {
     const bot = this.bots.get(id);
     if (!bot) return;
     bot.setDecision(buys);
+    this.lastDecidedId = id;
     const index = buys ? this.buySlots++ : this.passSlots++;
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
     const cx = buys ? 9 : -9;
@@ -462,13 +492,17 @@ export class Arena {
     const height = this.renderer.domElement.clientHeight;
     const { offsetLeft, offsetTop } = this.renderer.domElement;
     const projected = new THREE.Vector3();
-    const rank = { thinking: 1, walking: 2, buy: 3 };
+    const rank = { thinking: 1, walking: 2, buy: 3, pass: 4 };
     const candidates = [];
     for (const [id, bot] of this.bots) {
       const label = this.labels.get(id);
       const selected = id === this.selectedId;
-      // Queued and decided bots stay unlabelled (the zone sign counts them) unless selected.
-      if (!selected && !(bot.state in rank)) {
+      // Queued bots stay unlabelled. Settled bots in a pile drop their tag (the zone sign
+      // carries the count); only the latest decision and the selected bot keep a name.
+      const settled = bot.state === "buy" || bot.state === "pass";
+      const compact = false;
+      label.classList.toggle("compact", compact);
+      if (!selected && (!(bot.state in rank) || (settled && id !== this.lastDecidedId))) {
         label.style.display = "none";
         continue;
       }
@@ -480,6 +514,9 @@ export class Arena {
       candidates.push({
         label,
         bot,
+        compact,
+        w: 64,
+        h: 26,
         priority: selected ? 0 : rank[bot.state],
         x: offsetLeft + ((projected.x + 1) / 2) * width,
         y: offsetTop + ((1 - projected.y) / 2) * height,
@@ -490,20 +527,31 @@ export class Arena {
       projected.set(x, y, z).project(this.camera);
       return [offsetLeft + ((projected.x + 1) / 2) * width, offsetTop + ((1 - projected.y) / 2) * height];
     };
-    const [signLeft, signTop] = toScreen(-2.5, 4.45, -0.3);
-    const [signRight, signBottom] = toScreen(2.5, 1.95, -0.3);
-    const onSign = (x, y) => x + 40 > signLeft && x - 40 < signRight && y > signTop && y - 22 < signBottom;
+    // Reserved screen boxes: the stall sign and both zone count signs ("PASS · 16").
+    const signBox = (left, top, right, bottom, z) => {
+      const [x1, y1] = toScreen(left, top, z);
+      const [x2, y2] = toScreen(right, bottom, z);
+      return { left: Math.min(x1, x2), right: Math.max(x1, x2), top: Math.min(y1, y2), bottom: Math.max(y1, y2) };
+    };
+    const reserved = [
+      signBox(-2.5, 4.45, 2.5, 1.95, -0.3),
+      signBox(9 - 1.9, 3.6, 9 + 1.9, 1.6, 0.4),
+      signBox(-9 - 1.9, 3.6, -9 + 1.9, 1.6, 0.4),
+    ];
+    const onSign = (x, y, w = 80, h = 22) => reserved.some((box) =>
+      x + w / 2 > box.left && x - w / 2 < box.right && y > box.top && y - h < box.bottom);
     // Hide a label when a higher-priority one already sits on the same spot.
     candidates.sort((a, b) => a.priority - b.priority);
     const placed = [];
-    const clashes = (x, y) => onSign(x, y) || placed.some((p) => Math.abs(p.x - x) < 64 && Math.abs(p.y - y) < 26);
+    const clashes = (item) => onSign(item.x, item.y, item.w, item.h) || placed.some((p) =>
+      Math.abs(p.x - item.x) < (p.w + item.w) / 2 && Math.abs(p.y - item.y) < (p.h + item.h) / 2);
     for (const item of candidates) {
-      if (clashes(item.x, item.y)) {
+      if (!item.compact && clashes(item)) {
         const [footX, footY] = toScreen(item.bot.group.position.x, -0.1, item.bot.group.position.z);
         item.x = footX;
         item.y = footY + 26;
       }
-      const clash = clashes(item.x, item.y);
+      const clash = clashes(item);
       item.label.style.display = clash ? "none" : "block";
       if (clash) continue;
       placed.push(item);

@@ -40,8 +40,8 @@ BANNER = (
 )
 BANNER_CSS = """
 /* online demo only (added by scripts/build_pages.py) */
-.demo-banner { padding: 7px 18px; font-size: 13px; color: var(--text); background: #1a2340; border-bottom: 1px solid var(--line); }
-.demo-banner a { color: var(--accent); }
+.demo-banner { padding: 7px 18px; font-size: 13px; color: var(--text); background: var(--panel); border-bottom: 1px solid var(--line); }
+.demo-banner a { color: var(--accent-text); }
 .demo-engine-status { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 50;
   padding: 10px 16px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line);
   color: var(--text); font-size: 13px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }

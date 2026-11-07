@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Founder Studio · pre-launch simulator</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237aa2ff'/%3E%3Ccircle cx='16' cy='13' r='6' fill='%230b0f1a'/%3E%3C/svg%3E">
-  <meta name="theme-color" content="#0b0f1a">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Ccircle cx='16' cy='13' r='6' fill='%230b0f1a'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#121314">
   <meta name="description" content="Founder Studio: watch simulated buyers decide on your product before you launch. Local, free, honest.">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -16,14 +16,14 @@
       <span class="logo" aria-hidden="true"></span>
       <div>
         <h1 class="brand-name">Founder Studio</h1>
-        <small>pre-launch simulator · ambitious-founder</small>
+        <small>See who buys before you launch</small>
       </div>
     </div>
     <div class="project-picker">
       <label for="projectSelect" class="sr-only">Project</label>
       <select id="projectSelect"></select>
       <button id="newProjectBtn" class="ghost" title="Start a new project">+ New</button>
-      <a href="#setupPanel" class="setup-jump ghost" title="Edit product, buyers and pitch">⚙ Setup</a>
+      <a href="#setupPanel" class="setup-jump ghost" title="Edit product, buyers and pitch">Setup</a>
     </div>
     <div class="mode" role="radiogroup" aria-label="Simulation mode">
       <button data-mode="heuristic" class="seg active" title="Instant, offline rule model. Not AI, not evidence.">Quick sim</button>
@@ -31,25 +31,24 @@
       <button data-mode="replay" class="seg" title="Replay a panel already saved in this project.">Replay</button>
     </div>
     <div class="run">
-      <label class="speed">Speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
-      <button id="skipBtn" class="ghost" hidden title="Finish this run instantly and show the results">&#9197; Skip<span class="long"> to results</span></button>
-      <button id="runBtn" class="primary">▶ Run panel</button>
+      <label class="speed" title="How fast buyers walk in the arena. Does not change results.">Walk speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
+      <button id="skipBtn" class="ghost" hidden title="Finish this run instantly and show the results">Skip<span class="long"> to results</span></button>
+      <button id="runBtn" class="primary">Run panel</button>
     </div>
   </header>
 
   <main class="layout">
     <aside id="setupPanel" class="setup" aria-label="Setup">
-      <details open>
-        <summary><span class="step">1</span> Product & price</summary>
+      <details id="productSection" open>
+        <summary><span class="step">1</span> Product &amp; price <span id="productSummary" class="sum-note"></span></summary>
         <label>Business (one line)<input id="business" placeholder="Undanu - digital wedding invitations"></label>
         <label>Target buyer<input id="target" placeholder="Couples planning a wedding in 6 months"></label>
-        <div class="row">
-          <label>Price<input id="price" type="number" min="0" step="any"></label>
-          <label>Market anchor<input id="anchor" type="number" min="0" step="any" title="Typical price buyers compare against (used by Quick sim only)"></label>
-        </div>
+        <label>Price<input id="price" type="number" min="0" step="any"></label>
         <details class="more">
-          <summary>Idea notes <em>(optional)</em></summary>
-          <label><span class="sr-only">Idea notes</span><textarea id="idea" rows="3" placeholder="What it is, for whom, how it's sold"></textarea></label>
+          <summary>Market anchor &amp; notes <em>(optional)</em></summary>
+          <label>Market anchor<input id="anchor" type="number" min="0" step="any" placeholder="defaults to your price"></label>
+          <p class="hint">The price buyers compare you against. Quick sim only.</p>
+          <label>Idea notes<textarea id="idea" rows="3" placeholder="What it is, for whom, how it's sold"></textarea></label>
         </details>
       </details>
 
@@ -76,11 +75,11 @@
 
       <details open>
         <summary><span class="step">3</span> Pitch (what each bot reads)</summary>
-        <textarea id="pitch" rows="6" placeholder="3-6 plain lines: product, price, where/how, opening offer"></textarea>
+        <textarea id="pitch" rows="8" placeholder="3-6 plain lines: product, price, where/how, opening offer"></textarea>
         <p class="hint">Plain words, no superlatives, nothing you can't deliver.</p>
       </details>
 
-      <details>
+      <details id="aiSection" hidden>
         <summary><span class="step">AI</span> AI buyer model</summary>
         <label>Provider
           <select id="provider">
@@ -101,26 +100,26 @@
         <div class="hud">
           <div class="hud-card progress">
             <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15.9" class="track"/><circle id="progressArc" cx="18" cy="18" r="15.9" class="arc"/></svg>
-            <div><strong id="progressText">0/0</strong><small id="stateText">ready</small></div>
+            <div><strong id="progressText">0/0</strong><small id="stateText">ready</small><small id="hudSource" class="hud-src">source: Quick sim</small></div>
           </div>
           <div class="hud-card counts">
             <div><span class="dot buy"></span><strong id="buyCount">0</strong> buy</div>
             <div><span class="dot pass"></span><strong id="passCount">0</strong> pass</div>
           </div>
           <div class="hud-card rate">
-            <small>buy rate</small>
+            <small>simulated buy rate</small>
             <strong id="rateText">–</strong>
             <div class="bar"><div id="rateFill" class="fill"></div><div id="barMark" class="mark" title="verdict bar"></div></div>
             <small id="barLabel" class="bar-label">target 25%</small>
           </div>
         </div>
         <div class="badges">
-          <span id="modeBadge" class="badge">Quick sim · rule-based, not AI</span>
-          <span class="badge warn">Simulated buyers · upper bound, not customers</span>
+          <span id="modeBadge" class="badge">Quick sim · rules, not AI</span>
+          <span class="badge warn" title="Simulated buyers give an upper bound. Real customers usually buy less.">Simulated buyers, not customers</span>
         </div>
         <div id="ticker" class="ticker" aria-live="polite" hidden></div>
         <div id="arenaHint" class="arena-hint" role="note">
-          <span>Press <b>&#9654; Run panel</b>: buyers walk up, read your pitch, then walk to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
+          <span>Press <b>Run panel</b>: buyers walk up, read your pitch, then walk to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
           <button class="hint-close" id="hintClose" aria-label="Hide this tip">&times;</button>
         </div>
         <div id="legend" class="legend"></div>
@@ -140,7 +139,7 @@
         <section id="tab-results" class="panel active"><div class="empty how">
           <b>How it works</b>
           <ol>
-            <li>Press <b>&#9654; Run panel</b>. Simulated buyers walk up to your stall and read your pitch.</li>
+            <li>Press <b>Run panel</b>. Simulated buyers walk up to your stall and read your pitch.</li>
             <li>An amber ring means a buyer is thinking.</li>
             <li>Each buyer walks to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>; the reason appears in Live decisions.</li>
             <li>Results then show who buys by segment, why the rest pass, and the next test to run.</li>
@@ -156,7 +155,7 @@
               <h3>Offer B</h3>
               <p class="hint">Same buyers (same seed) read a different pitch. The only fair way to see if an offer change helps.</p>
               <textarea id="pitchB" rows="7" placeholder="Rewrite the pitch to answer the top pass reasons…"></textarea>
-              <button id="runAbBtn" class="primary">▶ Run B with the same buyers</button>
+              <button id="runAbBtn" class="primary">Run B with the same buyers</button>
             </div>
             <div id="abResult"><p class="empty">Run panel A first, then B.</p></div>
           </div>
@@ -174,6 +173,7 @@
     <aside class="feed" aria-label="Live feed">
       <div class="feed-head"><h2>Live decisions</h2><span id="feedCount" class="pill">0</span></div>
       <ol id="feedList" class="feed-list"></ol>
+      <p class="empty feed-empty">Each buyer's decision and reason appears here as they choose. Hover one to find that buyer in the arena.</p>
       <div id="botCard" class="bot-card" hidden></div>
     </aside>
   </main>
