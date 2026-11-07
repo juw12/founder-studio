@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Founder Studio · pre-launch simulator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237aa2ff'/%3E%3Ccircle cx='16' cy='13' r='6' fill='%230b0f1a'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#0b0f1a">
+  <meta name="description" content="Founder Studio: watch simulated buyers decide on your product before you launch. Local, free, honest.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="demo-banner" role="note">Online demo: the studio runs in your browser (Python via WebAssembly), with the skill's own scripts. Nothing is saved, and AI buyers need the <a href="https://github.com/juw12/founder-studio#run">local app</a>.</div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1 class="brand-name">Founder Studio</h1>
+        <small>pre-launch simulator · ambitious-founder</small>
+      </div>
+    </div>
+    <div class="project-picker">
+      <label for="projectSelect" class="sr-only">Project</label>
+      <select id="projectSelect"></select>
+      <button id="newProjectBtn" class="ghost" title="Start a new project">+ New</button>
+      <a href="#setupPanel" class="setup-jump ghost" title="Edit product, buyers and pitch">⚙ Setup</a>
+    </div>
+    <div class="mode" role="radiogroup" aria-label="Simulation mode">
+      <button data-mode="heuristic" class="seg active" title="Instant, offline rule model. Not AI, not evidence.">Quick sim</button>
+      <button data-mode="ai" class="seg" title="Each buyer answered by an AI model, isolated, from the skill's brief.">AI buyers</button>
+      <button data-mode="replay" class="seg" title="Replay a panel already saved in this project.">Replay</button>
+    </div>
+    <div class="run">
+      <label class="speed">Speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
+      <button id="skipBtn" class="ghost" hidden title="Finish this run instantly and show the results">&#9197; Skip<span class="long"> to results</span></button>
+      <button id="runBtn" class="primary">▶ Run panel</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside id="setupPanel" class="setup" aria-label="Setup">
+      <details open>
+        <summary><span class="step">1</span> Product & price</summary>
+        <label>Business (one line)<input id="business" placeholder="Undanu - digital wedding invitations"></label>
+        <label>Target buyer<input id="target" placeholder="Couples planning a wedding in 6 months"></label>
+        <div class="row">
+          <label>Price<input id="price" type="number" min="0" step="any"></label>
+          <label>Market anchor<input id="anchor" type="number" min="0" step="any" title="Typical price buyers compare against (used by Quick sim only)"></label>
+        </div>
+        <details class="more">
+          <summary>Idea notes <em>(optional)</em></summary>
+          <label><span class="sr-only">Idea notes</span><textarea id="idea" rows="3" placeholder="What it is, for whom, how it's sold"></textarea></label>
+        </details>
+      </details>
+
+      <details id="buyersSection">
+        <summary><span class="step">2</span> Buyers <span id="buyersSummary" class="sum-note"></span></summary>
+        <div class="list-head"><span>Segments</span><button class="mini" data-add="segments">+ add</button></div>
+        <div class="cols-hint" aria-hidden="true"><span>share of buyers (0-1)</span><span>income from</span><span>income to</span></div>
+        <div id="segments" class="rows"></div>
+        <details class="more">
+          <summary>Behaviours, doubts &amp; habits <em>(optional)</em></summary>
+          <div class="list-head"><span>Buying behaviours <em>(need = Quick sim weight)</em></span><button class="mini" data-add="behaviours">+ add</button></div>
+          <div id="behaviours" class="rows"></div>
+          <div class="list-head"><span>Objections <em>(tap = answered by pitch)</em></span><button class="mini" data-add="objections">+ add</button></div>
+          <div id="objections" class="chips"></div>
+          <label>Habits (one per line)<textarea id="habits" rows="3"></textarea></label>
+        </details>
+        <div class="row">
+          <label>Panel size
+            <select id="panelSize"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
+          </label>
+          <label>Seed<input id="seed" type="number" placeholder="random"></label>
+        </div>
+      </details>
+
+      <details open>
+        <summary><span class="step">3</span> Pitch (what each bot reads)</summary>
+        <textarea id="pitch" rows="6" placeholder="3-6 plain lines: product, price, where/how, opening offer"></textarea>
+        <p class="hint">Plain words, no superlatives, nothing you can't deliver.</p>
+      </details>
+
+      <details>
+        <summary><span class="step">AI</span> AI buyer model</summary>
+        <label>Provider
+          <select id="provider">
+            <option value="openai">OpenAI-compatible (OpenAI, Ollama, OpenRouter, LM Studio…)</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </label>
+        <label>Base URL<input id="baseUrl" placeholder="https://api.openai.com/v1  ·  http://localhost:11434/v1"></label>
+        <label>Model<input id="model" placeholder="gpt-4o-mini · llama3.1 · claude-sonnet-4-5"></label>
+        <label>API key<input id="apiKey" type="password" placeholder="kept in this tab only; or set OPENAI_API_KEY / ANTHROPIC_API_KEY"></label>
+        <label>Buyers in parallel<input id="concurrency" type="number" min="1" max="10" value="4"></label>
+        <p class="hint">Every bot gets its own isolated call with the skill's brief: no bot sees another's answer.</p>
+      </details>
+    </aside>
+
+    <section class="stage">
+      <div id="arena" class="arena">
+        <div class="hud">
+          <div class="hud-card progress">
+            <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15.9" class="track"/><circle id="progressArc" cx="18" cy="18" r="15.9" class="arc"/></svg>
+            <div><strong id="progressText">0/0</strong><small id="stateText">ready</small></div>
+          </div>
+          <div class="hud-card counts">
+            <div><span class="dot buy"></span><strong id="buyCount">0</strong> buy</div>
+            <div><span class="dot pass"></span><strong id="passCount">0</strong> pass</div>
+          </div>
+          <div class="hud-card rate">
+            <small>buy rate</small>
+            <strong id="rateText">–</strong>
+            <div class="bar"><div id="rateFill" class="fill"></div><div id="barMark" class="mark" title="verdict bar"></div></div>
+            <small id="barLabel" class="bar-label">target 25%</small>
+          </div>
+        </div>
+        <div class="badges">
+          <span id="modeBadge" class="badge">Quick sim · rule-based, not AI</span>
+          <span class="badge warn">Simulated buyers · upper bound, not customers</span>
+        </div>
+        <div id="ticker" class="ticker" aria-live="polite" hidden></div>
+        <div id="arenaHint" class="arena-hint" role="note">
+          <span>Press <b>&#9654; Run panel</b>: buyers walk up, read your pitch, then walk to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
+          <button class="hint-close" id="hintClose" aria-label="Hide this tip">&times;</button>
+        </div>
+        <div id="legend" class="legend"></div>
+        <button id="hintOpen" class="hint-open" type="button" aria-label="How the arena works" title="How the arena works">?</button>
+        <div id="toast" class="toast" hidden></div>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="results">Results</button>
+        <button class="tab" data-tab="pricing">Pricing</button>
+        <button class="tab" data-tab="numbers">Numbers</button>
+        <button class="tab" data-tab="competitors">Competitors</button>
+        <button class="tab" data-tab="ab">A/B offer</button>
+        <button class="tab" data-tab="verdict">Verdict</button>
+      </nav>
+      <div class="panels">
+        <section id="tab-results" class="panel active"><div class="empty how">
+          <b>How it works</b>
+          <ol>
+            <li>Press <b>&#9654; Run panel</b>. Simulated buyers walk up to your stall and read your pitch.</li>
+            <li>An amber ring means a buyer is thinking.</li>
+            <li>Each buyer walks to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>; the reason appears in Live decisions.</li>
+            <li>Results then show who buys by segment, why the rest pass, and the next test to run.</li>
+          </ol>
+          <p class="modes-note"><b>Quick sim</b> = instant rule model, free, not AI. <b>AI buyers</b> = one isolated model call per buyer. <b>Replay</b> = re-watch a saved panel. All are simulations, not customers.</p>
+        </div></section>
+        <section id="tab-pricing" class="panel"><p class="empty">Price answers appear here as bots decide (live preview), then the skill's van_westendorp.py result.</p></section>
+        <section id="tab-numbers" class="panel"></section>
+        <section id="tab-competitors" class="panel"></section>
+        <section id="tab-ab" class="panel">
+          <div class="ab-grid">
+            <div>
+              <h3>Offer B</h3>
+              <p class="hint">Same buyers (same seed) read a different pitch. The only fair way to see if an offer change helps.</p>
+              <textarea id="pitchB" rows="7" placeholder="Rewrite the pitch to answer the top pass reasons…"></textarea>
+              <button id="runAbBtn" class="primary">▶ Run B with the same buyers</button>
+            </div>
+            <div id="abResult"><p class="empty">Run panel A first, then B.</p></div>
+          </div>
+        </section>
+        <section id="tab-verdict" class="panel">
+          <div class="verdict-controls">
+            <label>Verdict bar (min buy rate)<input id="minBuyRate" type="number" min="0.05" max="0.9" step="0.05" value="0.25"></label>
+            <button id="verdictBtn" class="primary">Compute verdict with compile.py</button>
+          </div>
+          <div id="verdictOut"><p class="empty">The verdict only comes from the skill's script: every unit earns money, year 1 profits, break-even fits capacity, enough of the panel buys.</p></div>
+        </section>
+      </div>
+    </section>
+
+    <aside class="feed" aria-label="Live feed">
+      <div class="feed-head"><h2>Live decisions</h2><span id="feedCount" class="pill">0</span></div>
+      <ol id="feedList" class="feed-list"></ol>
+      <div id="botCard" class="bot-card" hidden></div>
+    </aside>
+  </main>
+
+  <script type="module" src="js/browser-backend.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

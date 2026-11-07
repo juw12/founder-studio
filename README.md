@@ -5,6 +5,18 @@ buyer segments and pitch, then watch 3D buyer bots walk up to your stall, think,
 Every number they produce is checked by the skill's own scripts (`panel.py`, `van_westendorp.py`,
 `unit_economics.py`, `compile.py`).
 
+## Online demo
+
+**https://juw12.github.io/founder-studio/** - nothing to install.
+
+- The page runs the same `server.py` and the skill's four scripts in your browser, through
+  [Pyodide](https://pyodide.org) (Python compiled to WebAssembly, bundled in `docs/pyodide/`, MPL-2.0).
+- It opens the `demo-matcha` project. Quick sim, pricing, numbers and the verdict all come from the real scripts.
+- What needs the local app: AI buyers (they call a language model), and saving. Edits in the online demo are lost on reload.
+- First load downloads about 14 MB (the Python runtime), then the browser caches it.
+- Rebuild after changing the app: `python scripts/build_pages.py --pyodide path/to/pyodide-0.27.7.tgz`
+  (without `--pyodide` it downloads the Pyodide release from npm). GitHub Pages serves `main:/docs`.
+
 ## Run
 
 Python 3.9+ standard library only. three.js r160 is bundled in `vendor/`, so there is no install step and no CDN.
