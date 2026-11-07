@@ -88,15 +88,22 @@ real buyers. That is why the studio labels everything and keeps real-world tests
 - AI runs cost tokens. 20 buyers is about 20 calls.
 - In background tabs, browsers throttle animation. Bots snap to their final spot when the run ends.
 
-## Design pass (/refine, Nov 2026)
+## Design pass (/hone, Nov 2026)
 
-Judged by a 3-model council against a frozen rubric, with code-checked gates (A1-A8) that the judges cannot override.
-Result: 6.7 with 6 gates failing -> **7.4 with all gates passing**. Rounds 3-4 did not beat 7.4 by the required 0.3, so they were reverted and the loop stopped on a plateau (target was 8.5).
+Judged by a 3-model council against a frozen rubric, with code-checked gates (A1-A8) the judges cannot override.
+Scored on six screenshots: idle, mid-run and finished, at 1280 px and 390 px.
+Result: **6.65 -> 8.43, all gates passing, API tests passing.** Target is 8.5, so this is not "done" yet; the loop stopped
+after two rounds that did not beat 8.43.
 
-- Round 1: favicon and title, 12 px text floor, contrast, a phone layout with 44 px tap targets, segment column labels,
-  number sources, and the "Next test" card.
-- Round 2: the arena stays clear. The tip is a one-line pill you can close, the full "How it works" sits in the empty
-  Results panel, and on phones the counters sit above the 3D view instead of on top of it.
+- Rounds 1-2 (earlier pass): favicon/title, 12 px floor, contrast, phone layout with 44 px targets, Next-test card,
+  arena kept clear.
+- Round 5: decided buyers stand in a tidy grid inside BUY/PASS with a green/red ring each; names show only while
+  walking or thinking (or when selected); a live line under the arena shows the newest decision and, at the end,
+  "N of 20 would buy - below your 25% target" with a See results button; results open with that headline;
+  Skip to results (also `?skip=1`); optional setup fields are collapsed.
+- Round 6: short stall title that never hides behind the counters; the honesty badges no longer overlap the buy-rate card.
+- Round 7: name labels never cover the stall sign, a stronger thinking ring, more space in the piles, the three modes
+  explained under How it works, and a `?` button to reopen the arena tip.
 
-Still open (from the judges): bot states are hard to read inside the BUY/PASS piles, the setup form is long for a first
-run, and there is no "one sentence -> buyers" generator yet.
+Still open (from the judges): telling individual buyers apart inside a full pile, a shorter first-run setup form,
+and the legend at 390 px.
