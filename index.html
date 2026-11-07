@@ -30,6 +30,7 @@
     </div>
     <div class="run">
       <label class="speed">Speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
+      <button id="skipBtn" class="ghost" hidden title="Finish this run instantly and show the results">&#9197; Skip<span class="long"> to results</span></button>
       <button id="runBtn" class="primary">▶ Run panel</button>
     </div>
   </header>
@@ -44,7 +45,10 @@
           <label>Price<input id="price" type="number" min="0" step="any"></label>
           <label>Market anchor<input id="anchor" type="number" min="0" step="any" title="Typical price buyers compare against (used by Quick sim only)"></label>
         </div>
-        <label>Idea notes<textarea id="idea" rows="3" placeholder="What it is, for whom, how it's sold"></textarea></label>
+        <details class="more">
+          <summary>Idea notes <em>(optional)</em></summary>
+          <label><span class="sr-only">Idea notes</span><textarea id="idea" rows="3" placeholder="What it is, for whom, how it's sold"></textarea></label>
+        </details>
       </details>
 
       <details open>
@@ -52,11 +56,14 @@
         <div class="list-head"><span>Segments</span><button class="mini" data-add="segments">+ add</button></div>
         <div class="cols-hint" aria-hidden="true"><span>share of buyers (0-1)</span><span>income from</span><span>income to</span></div>
         <div id="segments" class="rows"></div>
-        <div class="list-head"><span>Buying behaviours <em>(need = Quick sim weight)</em></span><button class="mini" data-add="behaviours">+ add</button></div>
-        <div id="behaviours" class="rows"></div>
-        <div class="list-head"><span>Objections <em>(tap = answered by pitch)</em></span><button class="mini" data-add="objections">+ add</button></div>
-        <div id="objections" class="chips"></div>
-        <label>Habits (one per line)<textarea id="habits" rows="3"></textarea></label>
+        <details class="more">
+          <summary>Behaviours, doubts &amp; habits <em>(optional)</em></summary>
+          <div class="list-head"><span>Buying behaviours <em>(need = Quick sim weight)</em></span><button class="mini" data-add="behaviours">+ add</button></div>
+          <div id="behaviours" class="rows"></div>
+          <div class="list-head"><span>Objections <em>(tap = answered by pitch)</em></span><button class="mini" data-add="objections">+ add</button></div>
+          <div id="objections" class="chips"></div>
+          <label>Habits (one per line)<textarea id="habits" rows="3"></textarea></label>
+        </details>
         <div class="row">
           <label>Panel size
             <select id="panelSize"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
@@ -102,12 +109,14 @@
             <small>buy rate</small>
             <strong id="rateText">–</strong>
             <div class="bar"><div id="rateFill" class="fill"></div><div id="barMark" class="mark" title="verdict bar"></div></div>
+            <small id="barLabel" class="bar-label">target 25%</small>
           </div>
         </div>
         <div class="badges">
           <span id="modeBadge" class="badge">Quick sim · heuristic</span>
           <span class="badge warn">Simulated buyers · upper bound, not customers</span>
         </div>
+        <div id="ticker" class="ticker" aria-live="polite" hidden></div>
         <div id="arenaHint" class="arena-hint" role="note">
           <span>Press <b>&#9654; Run panel</b>: buyers walk up, read your pitch, then walk to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
           <button class="hint-close" id="hintClose" aria-label="Hide this tip">&times;</button>

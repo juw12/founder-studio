@@ -22,8 +22,11 @@ const state = {
   need: {},
   runs: { A: null, B: null },
   running: false,
+  skip: false,
   selected: null,
 };
+// Waits that "Skip to results" can cut short.
+const pause = (ms) => (state.skip ? Promise.resolve() : sleep(ms));
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -290,7 +293,26 @@ function updateHud(answers, total, status) {
   const rate = done ? buys / done : null;
   $("#rateText").textContent = pct(rate);
   $("#rateFill").style.width = `${rate ? rate * 100 : 0}%`;
-  $("#barMark").style.left = `${(Number($("#minBuyRate").value) || 0.25) * 100}%`;
+  const target = Number($("#minBuyRate").value) || 0.25;
+  $("#barMark").style.left = `${target * 100}%`;
+  $("#barLabel").textContent = `target ${pct(target)}`;
+}
+
+// One line under the HUD that ties the arena to the feed and, at the end, to the results.
+function setTicker(html, tone = "") {
+  const ticker = $("#ticker");
+  ticker.hidden = !html;
+  ticker.className = `ticker ${tone}`;
+  ticker.innerHTML = html;
+  $("#tickerResults")?.addEventListener("click", () => {
+    document.querySelector('.tab[data-tab="results"]')?.click();
+    $(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function segmentHex(segment) {
+  const index = (state.customer?.segments || []).findIndex((s) => s.name === segment);
+  return SEGMENT_HEX[(index < 0 ? 0 : index) % SEGMENT_HEX.length];
 }
 
 function feedItem(persona, answer, status) {
@@ -299,11 +321,17 @@ function feedItem(persona, answer, status) {
     item = document.createElement("li");
     item.dataset.id = persona.id;
     item.addEventListener("click", () => selectBot(persona.id));
+    item.addEventListener("mouseenter", () => arena.highlight(persona.id));
+    item.addEventListener("mouseleave", () => arena.highlight(state.selected));
     $("#feedList").prepend(item);
   }
   const tag = status === "thinking" ? '<span class="tag think">thinking</span>'
     : answer?.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>';
-  item.innerHTML = `<div class="who"><span><b>${escapeHtml(persona.name || persona.id)}</b> · ${escapeHtml(persona.segment)}</span>${tag}</div>
+  if (status !== "thinking" && answer) {
+    const verb = answer.buys ? '<b class="buy-text">BUY</b>' : '<b class="pass-text">PASS</b>';
+    setTicker(`<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> &rarr; ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`);
+  }
+  item.innerHTML = `<div class="who"><span><span class="dot" style="background:${segmentHex(persona.segment)}"></span><b>${escapeHtml(persona.name || persona.id)}</b> · ${escapeHtml(persona.segment)}</span>${tag}</div>
     <div class="why">${status === "thinking" ? escapeHtml(`"${persona.objection}"…`) : escapeHtml(answer?.reason || answer?.error || "")}</div>`;
   $("#feedCount").textContent = $$("#feedList li").length;
 }
@@ -314,6 +342,7 @@ function selectBot(id) {
   const persona = run.personas.find((p) => p.id === id);
   if (!persona) return;
   const answer = run.answers.find((a) => a.id === id);
+  state.selected = id;
   arena.highlight(id);
   const card = $("#botCard");
   card.hidden = false;
@@ -356,8 +385,10 @@ async function runPanel(letter = "A") {
     toast("No model set: using server defaults (OPENAI_API_KEY / gpt-4o-mini).", false);
   }
   state.running = true;
+  state.skip = params.get("skip") === "1";
   $("#runBtn").disabled = true;
   $("#runAbBtn").disabled = true;
+  $("#skipBtn").hidden = state.skip;
   try {
     const seed = letter === "B" ? state.runs.A.seed : (Number($("#seed").value) || undefined);
     const dealt = await api("/api/deal", {
@@ -384,6 +415,12 @@ async function runPanel(letter = "A") {
     run.serverPricing = saved.pricing;
     updateHud(run.answers, run.personas.length, "done");
     renderResults(run.answers, run.personas, saved.results, letter === "B" ? "Offer B" : `Panel A · ${run.engine}`);
+    const summary = state.summary;
+    setTicker(
+      `<span><b>${summary.buys} of ${summary.n} would buy</b> (${pct(summary.rate)}) - ${summary.rate >= summary.bar ? "meets" : "below"} your ${pct(summary.bar)} target.</span>`
+      + `<button class="ghost" id="tickerResults">See results &darr;</button>`,
+      summary.rate >= summary.bar ? "good" : "bad"
+    );
     renderPricing(run.answers, saved.pricing);
     if (letter === "B") renderAb();
     toast(`${saved.results?.buys ?? run.answers.filter((a) => a.buys).length}/${run.personas.length} buy · checked by panel.py`);
@@ -392,6 +429,8 @@ async function runPanel(letter = "A") {
     updateHud(state.current?.answers || [], state.current?.personas.length || 0, "stopped");
   } finally {
     state.running = false;
+    state.skip = false;
+    $("#skipBtn").hidden = true;
     $("#runBtn").disabled = false;
     $("#runAbBtn").disabled = false;
     refreshProjectList().catch(() => {});
@@ -418,11 +457,11 @@ async function animateRun(run, price) {
   const concurrency = state.mode === "ai" ? Math.max(1, Math.min(10, Number($("#concurrency").value) || 4)) : 3;
   let livePricingTick = 0;
   const worker = async (workerIndex) => {
-    await sleep(workerIndex * 350 / speed());
+    await pause(workerIndex * 350 / speed());
     while (queue.length) {
       const persona = queue.shift();
       arena.setSpeed(speed());
-      await sleep(arena.approach(persona.id));
+      await pause(arena.approach(persona.id));
       arena.think(persona.id);
       feedItem(persona, null, "thinking");
       let answer;
@@ -437,7 +476,7 @@ async function animateRun(run, price) {
           });
           answer = normaliseAnswer(response.answer, persona.id);
         } else {
-          await sleep((700 + Math.random() * 900) / speed());
+          await pause((700 + Math.random() * 900) / speed());
           answer = heuristicAnswer(persona, context);
         }
       } catch (error) {
@@ -450,11 +489,11 @@ async function animateRun(run, price) {
       updateHud(run.answers, run.personas.length, "deciding");
       if (++livePricingTick % 3 === 0) renderPricing(run.answers, null);
       if (state.selected === persona.id) selectBot(persona.id);
-      await sleep(250 / speed());
+      await pause(250 / speed());
     }
   };
   await Promise.all(Array.from({ length: concurrency }, (_, i) => worker(i)));
-  await sleep(600 / speed());
+  await pause(600 / speed());
 }
 
 function normaliseAnswer(raw, id) {
@@ -485,13 +524,13 @@ async function replay() {
   arena.setSpeed(speed());
   const queue = run.personas.filter((p) => byId[p.id]);
   const worker = async (w) => {
-    await sleep(w * 300 / speed());
+    await pause(w * 300 / speed());
     while (queue.length) {
       const persona = queue.shift();
-      await sleep(arena.approach(persona.id));
+      await pause(arena.approach(persona.id));
       arena.think(persona.id);
       feedItem(persona, null, "thinking");
-      await sleep((600 + Math.random() * 700) / speed());
+      await pause((600 + Math.random() * 700) / speed());
       const answer = byId[persona.id];
       run.answers.push(answer);
       arena.decide(persona.id, answer.buys, answer.reason);
@@ -537,7 +576,10 @@ function renderResults(answers, personas, server, title) {
       : topDoubt
         ? `The most common unanswered doubt is <b>"${escapeHtml(topDoubt[0])}"</b> (${topDoubt[1]} buyers). Answer it in <b>offer B</b> and rerun with the same buyers.`
         : `Write a sharper <b>offer B</b> and rerun with the same buyers to see who you win or lose.`;
+  state.summary = { buys, n: answers.length, rate, bar };
+  const meets = rate >= bar;
   $("#tab-results").innerHTML = `
+    <div class="headline ${meets ? "good" : "bad"}"><strong>${buys} of ${answers.length} would buy</strong> <span>${pct(rate)} · ${meets ? "meets" : "below"} your ${pct(bar)} target${passReasons[0] ? ` · top reason to pass: <b>${escapeHtml(passReasons[0][0])}</b>` : ""}</span></div>
     <p class="source-line">Source: ${escapeHtml(source)}. Simulated buyers are an upper bound, not customers.</p>
     ${nextTest ? `<div class="next-test"><strong>Next test</strong><span>${nextTest}</span><button class="ghost" id="goAbBtn">Write offer B &rarr;</button></div>` : ""}
     <div class="cards">
@@ -788,6 +830,10 @@ $$(".tab").forEach((tab) => tab.addEventListener("click", () => {
   if (tab.dataset.tab === "competitors") renderCompetitors();
 }));
 $("#runBtn").addEventListener("click", () => runPanel("A"));
+$("#skipBtn").addEventListener("click", () => {
+  state.skip = true;
+  $("#skipBtn").hidden = true;
+});
 $("#runAbBtn").addEventListener("click", () => runPanel("B"));
 $("#verdictBtn").addEventListener("click", computeVerdict);
 $("#speed").addEventListener("input", () => arena.setSpeed(speed()));

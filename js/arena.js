@@ -62,7 +62,7 @@ function zoneDisc(color, label, x, z, radius) {
     transparent: true,
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), signMaterial);
-  sign.position.set(0, 2.9, -radius + 0.4);
+  sign.position.set(0, 3.5, -radius - 0.2);
   group.add(disc, ring, sign);
   group.position.set(x, 0, z);
   // Redraws the sign with a live count, e.g. "BUY · 4".
@@ -107,10 +107,10 @@ class Bot {
     this.bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), this.bulbMaterial);
     this.bulb.position.y = 2.0;
     this.ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.42, 0.035, 8, 48, Math.PI * 1.3),
+      new THREE.TorusGeometry(0.58, 0.07, 10, 48, Math.PI * 1.4),
       new THREE.MeshBasicMaterial({ color: THINK_COLOR, transparent: true, opacity: 0.95 })
     );
-    this.ring.position.y = 2.25;
+    this.ring.position.y = 2.35;
     this.ring.visible = false;
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 24),
@@ -118,9 +118,14 @@ class Bot {
     );
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.015;
+    this.decisionMaterial = new THREE.MeshBasicMaterial({ color: BUY_COLOR, transparent: true, opacity: 0.7 });
+    this.decisionDisc = new THREE.Mesh(new THREE.RingGeometry(0.38, 0.46, 32), this.decisionMaterial);
+    this.decisionDisc.rotation.x = -Math.PI / 2;
+    this.decisionDisc.position.y = 0.03;
+    this.decisionDisc.visible = false;
     this.rig = new THREE.Group();
     this.rig.add(body, head, visor, eyeLeft, eyeRight, antenna, this.bulb, this.ring);
-    this.group.add(this.rig, shadow);
+    this.group.add(this.rig, shadow, this.decisionDisc);
     this.group.position.copy(spawn);
     this.target = spawn.clone();
     this.speed = 3.2;
@@ -146,6 +151,8 @@ class Bot {
     const color = buys ? BUY_COLOR : PASS_COLOR;
     this.bulbMaterial.color.setHex(color);
     this.eyeMaterial.color.setHex(color);
+    this.decisionMaterial.color.setHex(color);
+    this.decisionDisc.visible = true;
     this.jump = buys ? 1 : 0;
   }
 
@@ -205,7 +212,7 @@ export class Arena {
     this.scene.background = new THREE.Color(0x0b0f1a);
     this.scene.fog = new THREE.Fog(0x0b0f1a, 28, 60);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
-    this.orbit = { azimuth: 0.0, elevation: 0.62, radius: 24, target: new THREE.Vector3(0, 0.5, 1.5) };
+    this.orbit = { azimuth: 0.0, elevation: 0.62, radius: 24, target: new THREE.Vector3(0, 1.4, 1.5) };
     this.updateCamera();
 
     this.scene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1f2e, 0.9));
@@ -262,17 +269,19 @@ export class Arena {
       new THREE.CylinderGeometry(0.06, 0.06, 2.4),
       new THREE.MeshStandardMaterial({ color: 0x9aa4b8 })
     );
-    pole.position.set(0, 2.2, -0.3);
+    pole.position.set(0, 1.9, -0.3);
     this.signMaterial = new THREE.MeshBasicMaterial({ map: labelTexture(["Your product", "pitch goes here"]), transparent: true });
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 2.7), this.signMaterial);
-    sign.position.set(0, 4.0, -0.3);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 2.5), this.signMaterial);
+    sign.position.set(0, 3.2, -0.3);
     this.stall.add(base, glow, counter, pole, sign);
     this.scene.add(this.stall);
   }
 
   setStall(title, subtitle) {
+    const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
+    const shortTitle = title.replace(/\s*\(.*$/, "").split(/ - | – /)[0].trim() || title;
     this.signMaterial.map?.dispose();
-    this.signMaterial.map = labelTexture([title.slice(0, 26), subtitle.slice(0, 40)]);
+    this.signMaterial.map = labelTexture([clip(shortTitle, 22), clip(subtitle, 36)]);
     this.signMaterial.needsUpdate = true;
   }
 
@@ -360,6 +369,7 @@ export class Arena {
   }
 
   spawn(persona, segmentIndex, index, total) {
+    this.panelSize = total;
     const spread = Math.min(22, 1.2 * total);
     const x = -spread / 2 + (spread * (index + 0.5)) / Math.max(1, total);
     const spawn = new THREE.Vector3(x, 0, -14 - (index % 3) * 1.2);
@@ -412,9 +422,11 @@ export class Arena {
     const index = buys ? this.buySlots++ : this.passSlots++;
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
     const cx = buys ? 9 : -9;
-    const col = index % 5;
-    const row = Math.floor(index / 5);
-    bot.walkTo(new THREE.Vector3(cx - 2.4 + col * 1.2, 0, 3.6 + row * 1.1));
+    const columns = this.panelSize > 30 ? 8 : 5;
+    const gap = columns === 8 ? 0.8 : 1.25;
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, 5 - 1.6 + row * gap));
     const label = this.labels.get(id);
     if (label) {
       label.dataset.state = buys ? "buy" : "pass";
@@ -450,17 +462,37 @@ export class Arena {
     const height = this.renderer.domElement.clientHeight;
     const { offsetLeft, offsetTop } = this.renderer.domElement;
     const projected = new THREE.Vector3();
+    const rank = { thinking: 1, walking: 2 };
+    const candidates = [];
     for (const [id, bot] of this.bots) {
       const label = this.labels.get(id);
-      // Queued bots stay unlabelled so the crowd at the entrance is readable.
-      if (bot.state === "queued") {
+      const selected = id === this.selectedId;
+      // Queued and decided bots stay unlabelled (the zone sign counts them) unless selected.
+      if (!selected && !(bot.state in rank)) {
         label.style.display = "none";
         continue;
       }
-      projected.set(bot.group.position.x, 2.55, bot.group.position.z).project(this.camera);
-      const visible = projected.z < 1;
-      label.style.display = visible ? "block" : "none";
-      label.style.transform = `translate(-50%, -100%) translate(${offsetLeft + ((projected.x + 1) / 2) * width}px, ${offsetTop + ((1 - projected.y) / 2) * height}px)`;
+      projected.set(bot.group.position.x, 2.75, bot.group.position.z).project(this.camera);
+      if (projected.z >= 1) {
+        label.style.display = "none";
+        continue;
+      }
+      candidates.push({
+        label,
+        priority: selected ? 0 : rank[bot.state],
+        x: offsetLeft + ((projected.x + 1) / 2) * width,
+        y: offsetTop + ((1 - projected.y) / 2) * height,
+      });
+    }
+    // Hide a label when a higher-priority one already sits on the same spot.
+    candidates.sort((a, b) => a.priority - b.priority);
+    const placed = [];
+    for (const item of candidates) {
+      const clash = placed.some((p) => Math.abs(p.x - item.x) < 64 && Math.abs(p.y - item.y) < 26);
+      item.label.style.display = clash ? "none" : "block";
+      if (clash) continue;
+      placed.push(item);
+      item.label.style.transform = `translate(-50%, -100%) translate(${item.x}px, ${item.y}px)`;
     }
   }
 }

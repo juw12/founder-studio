@@ -306,3 +306,49 @@ td input { width: 100%; padding: 4px 6px; font-size: 12px; }
 }
 .hud, .badges { z-index: 3; }
 .bot-labels { z-index: 2; }
+
+/* ---- /hone round 5: tidy piles, live ticker, results headline, collapsed advanced setup ---- */
+.ticker {
+  position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%); z-index: 3; width: max-content; max-width: min(620px, calc(100% - 24px));
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: #0d1424e6; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.4;
+}
+.ticker[hidden] { display: none; }
+.ticker > span:not(.dot) { flex: 1 1 200px; min-width: 0; }
+.ticker.good { border-color: var(--buy); }
+.ticker.bad { border-color: var(--pass); }
+.ticker button { padding: 6px 12px; color: var(--text); }
+.buy-text { color: var(--buy); }
+.pass-text { color: var(--pass); }
+.hud-card .bar-label { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.headline {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 0 0 10px;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #0d1424;
+}
+.headline strong { font-size: 22px; }
+.headline span { color: var(--muted); }
+.headline.good { border-color: var(--buy); }
+.headline.good strong { color: var(--buy); }
+.headline.bad { border-color: var(--pass); }
+.headline.bad strong { color: #ff8fa0; }
+.feed-list .who .dot { width: 8px; height: 8px; }
+details.more { margin: 6px 0 2px; border-top: 1px dashed var(--line); padding-top: 4px; }
+details.more > summary { font-weight: 500; font-size: 13px; color: var(--muted); }
+details.more > summary::before { content: "\25B8"; color: var(--accent); }
+details.more[open] > summary::before { content: "\25BE"; }
+details.more > summary em { font-style: normal; font-size: 12px; }
+#skipBtn { color: var(--text); }
+@media (max-width: 760px) {
+  .arena .ticker { position: static; order: 3; transform: none; width: auto; margin: 8px 12px 0; max-width: none; }
+  #skipBtn { flex: 1 1 auto; min-height: 44px; }
+}
+
+/* ---- /hone round 6: badges never collide with the HUD, compact phone run row ---- */
+@media (min-width: 761px) {
+  .badges { max-width: 200px; }
+  .badges .badge { white-space: normal; text-align: right; line-height: 1.3; }
+}
+@media (max-width: 760px) {
+  #skipBtn .long { display: none; }
+  #runBtn { white-space: nowrap; }
+}
