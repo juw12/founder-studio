@@ -92,8 +92,9 @@ real buyers. That is why the studio labels everything and keeps real-world tests
 
 Judged by a 3-model council against a frozen rubric, with code-checked gates (A1-A8) the judges cannot override.
 Scored on six screenshots: idle, mid-run and finished, at 1280 px and 390 px.
-Result: **6.65 -> 8.43, all gates passing, API tests passing.** Target is 8.5, so this is not "done" yet; the loop stopped
-after two rounds that did not beat 8.43.
+Result: **6.65 -> 8.08 (3 judges, mean of 2 scoring runs), all gates passing, API tests passing.** Target is 8.5, so this
+is not "done" yet. An earlier 8.43 came from only 2 judges (the vision judge was failing on image size); with all 3 judges
+that version re-scores 7.6, and round 11 beat it.
 
 - Rounds 1-2 (earlier pass): favicon/title, 12 px floor, contrast, phone layout with 44 px targets, Next-test card,
   arena kept clear.
@@ -105,5 +106,8 @@ after two rounds that did not beat 8.43.
 - Round 7: name labels never cover the stall sign, a stronger thinking ring, more space in the piles, the three modes
   explained under How it works, and a `?` button to reopen the arena tip.
 
+- Round 11: the Buyers section starts collapsed with a one-line summary; the badge says "rule-based, not AI"; the final
+  line names the top reason to pass; roomier BUY/PASS zones; the phone legend sits inside the arena; a phone Setup button.
+
 Still open (from the judges): telling individual buyers apart inside a full pile, a shorter first-run setup form,
-and the legend at 390 px.
+and a less crowded phone layout (arena, feed and setup on one screen).
