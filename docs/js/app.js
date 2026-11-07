@@ -3,6 +3,9 @@ import { Arena } from "./arena.js";
 import {
   heuristicAnswer, suggestAddressed, vanWestendorp, groupRates, reasonCounts, median,
 } from "./engine.js";
+import {
+  REVIEWERS, ruleReview, applyFixes, keepBest, placeholderCount, reviewerBrief, editorBrief, answeredMap,
+} from "./review.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -370,6 +373,7 @@ function feedItem(persona, answer, status) {
 }
 
 function selectBot(id) {
+  if (String(id).startsWith("R")) return selectReviewer(id);
   const run = state.current;
   if (!run) return;
   const persona = run.personas.find((p) => p.id === id);
@@ -401,6 +405,13 @@ function selectBot(id) {
 }
 
 // ---------------- running a panel ----------------
+function setRunButtons(disabled) {
+  for (const id of ["#runBtn", "#runAbBtn", "#loopBtn"]) {
+    const button = $(id);
+    if (button) button.disabled = disabled;
+  }
+}
+
 function variantName(letter) {
   const base = state.mode === "ai" ? "panel-ai" : "panel-quick";
   return letter === "B" ? `${base}-b` : base;
@@ -426,43 +437,11 @@ async function runPanel(letter = "A") {
   state.running = true;
   document.documentElement.dataset.run = "running";
   state.skip = params.get("skip") === "1";
-  $("#runBtn").disabled = true;
-  $("#runAbBtn").disabled = true;
+  setRunButtons(true);
   $("#skipBtn").hidden = state.skip;
   try {
     const seed = letter === "B" ? state.runs.A.seed : (Number($("#seed").value) || undefined);
-    const dealt = await api("/api/deal", {
-      name: state.project,
-      variant: variantName(letter),
-      customer: state.customer,
-      pitch,
-      n: Number($("#panelSize").value),
-      seed,
-      idea: $("#idea").value,
-    });
-    $("#seed").value = dealt.seed;
-    const run = {
-      letter, variant: dealt.variant, seed: dealt.seed, personas: dealt.personas, briefs: dealt.briefs,
-      answers: [], engine: state.mode === "ai" ? `AI · ${$("#model").value || "default model"}` : "heuristic", pitch,
-    };
-    state.current = run;
-    state.runs[letter] = run;
-    await animateRun(run, price);
-    arena.settle();
-    updateHud(run.answers, run.personas.length, "verifying with skill scripts…");
-    const saved = await api("/api/answers", { name: state.project, variant: run.variant, answers: run.answers, price });
-    run.serverResults = saved.results;
-    run.serverPricing = saved.pricing;
-    updateHud(run.answers, run.personas.length, "done");
-    renderResults(run.answers, run.personas, saved.results, letter === "B" ? "Offer B" : `Panel A · ${run.engine}`);
-    const summary = state.summary;
-    setTicker(
-      `<span><b>${summary.buys} of ${summary.n} would buy</b> (${pct(summary.rate)}) - ${summary.rate >= summary.bar ? "meets" : "below"} your ${pct(summary.bar)} target.${summary.topReason ? ` Top reason to pass: <b>${escapeHtml(summary.topReason[0])}</b> (${summary.topReason[1]}).` : ""}</span>`
-      + `<button class="ghost" id="tickerResults">See results</button>`,
-      summary.rate >= summary.bar ? "good" : "bad"
-    );
-    renderPricing(run.answers, saved.pricing);
-    if (letter === "B") renderAb();
+    await executeRun({ letter, pitch, seed, variant: variantName(letter), price });
     document.documentElement.dataset.run = "done";
   } catch (error) {
     document.documentElement.dataset.run = "stopped";
@@ -472,10 +451,50 @@ async function runPanel(letter = "A") {
     state.running = false;
     state.skip = false;
     $("#skipBtn").hidden = true;
-    $("#runBtn").disabled = false;
-    $("#runAbBtn").disabled = false;
+    setRunButtons(false);
     refreshProjectList().catch(() => {});
   }
+}
+
+// One panel run: deal the buyers, animate their decisions, verify with panel.py, render results.
+// Used by Run panel, offer B and every round of the review loop.
+async function executeRun({ letter = null, pitch, seed, variant, price, title, addressed }) {
+  const dealt = await api("/api/deal", {
+    name: state.project,
+    variant,
+    customer: state.customer,
+    pitch,
+    n: Number($("#panelSize").value),
+    seed,
+    idea: $("#idea").value,
+  });
+  $("#seed").value = dealt.seed;
+  const run = {
+    letter, variant: dealt.variant, seed: dealt.seed, personas: dealt.personas, briefs: dealt.briefs,
+    answers: [], engine: state.mode === "ai" ? `AI · ${$("#model").value || "default model"}` : "heuristic", pitch, addressed,
+  };
+  state.current = run;
+  if (letter) state.runs[letter] = run;
+  await animateRun(run, price);
+  arena.settle();
+  updateHud(run.answers, run.personas.length, "verifying with skill scripts…");
+  const saved = await api("/api/answers", { name: state.project, variant: run.variant, answers: run.answers, price });
+  run.serverResults = saved.results;
+  run.serverPricing = saved.pricing;
+  run.buys = run.answers.filter((a) => a.buys).length;
+  run.rate = run.answers.length ? run.buys / run.answers.length : 0;
+  updateHud(run.answers, run.personas.length, "done");
+  const heading = title || (letter === "B" ? "Offer B" : `Panel A · ${run.engine}`);
+  renderResults(run.answers, run.personas, saved.results, heading);
+  const summary = state.summary;
+  setTicker(
+    `<span><b>${summary.buys} of ${summary.n} would buy</b> (${pct(summary.rate)}) - ${summary.rate >= summary.bar ? "meets" : "below"} your ${pct(summary.bar)} target.${summary.topReason ? ` Top reason to pass: <b>${escapeHtml(summary.topReason[0])}</b> (${summary.topReason[1]}).` : ""}</span>`
+    + `<button class="ghost" id="tickerResults">See results</button>`,
+    summary.rate >= summary.bar ? "good" : "bad"
+  );
+  renderPricing(run.answers, saved.pricing);
+  if (letter === "B") renderAb();
+  return run;
 }
 
 async function animateRun(run, price) {
@@ -489,7 +508,7 @@ async function animateRun(run, price) {
   const context = {
     price,
     anchor: Number($("#anchor").value) || price,
-    addressed: { ...suggestAddressed(state.customer.objections, run.pitch), ...state.addressed },
+    addressed: run.addressed || { ...suggestAddressed(state.customer.objections, run.pitch), ...state.addressed },
     need: state.need,
     seed: run.seed,
     medianIncome: median(incomes),
@@ -641,7 +660,7 @@ function renderResults(answers, personas, server, title) {
   $("#tab-results").innerHTML = `
     <div class="headline ${meets ? "good" : "bad"}"><strong>${buys} of ${answers.length} would buy</strong> <span>${pct(rate)} · ${meets ? "meets" : "below"} your ${pct(bar)} target${passReasons[0] ? ` · top reason to pass: <b>${escapeHtml(passReasons[0][0])}</b>` : ""}</span></div>
     <p class="source-line">Source: ${escapeHtml(source)}. Simulated buyers are an upper bound, not customers.</p>
-    ${nextTest ? `<div class="next-test"><strong>Next test</strong><span>${nextTest}${priceLever}</span><button class="ghost" id="goAbBtn">Write offer B</button></div>` : ""}
+    ${nextTest ? `<div class="next-test"><strong>Next test</strong><span>${nextTest}${priceLever}</span><span class="next-actions"><button class="ghost" id="goReviewBtn">Auto-fix with reviewers</button><button class="ghost" id="goAbBtn">Write offer B</button></span></div>` : ""}
     <div class="cards">
       <div class="card"><small>${escapeHtml(title)}</small><strong>${buys}/${answers.length} buy</strong><span class="sub">${pct(rate)} · target ${pct(bar)} ${rate >= bar ? "met" : "not met"}</span></div>
       <div class="card"><small>Check</small><strong style="font-size:15px">${server ? '<span class="verified">Verified by panel.py</span>' : '<span class="preview">live preview</span>'}</strong><span class="sub">${escapeHtml(state.current?.engine || "")}</span></div>
@@ -658,6 +677,10 @@ function renderResults(answers, personas, server, title) {
     </div>`;
   $("#promoteBtn")?.addEventListener("click", promoteRun);
   $("#goAbBtn")?.addEventListener("click", () => document.querySelector('.tab[data-tab="ab"]')?.click());
+  $("#goReviewBtn")?.addEventListener("click", () => {
+    document.querySelector('.tab[data-tab="review"]')?.click();
+    if (!state.running) runReviewLoop();
+  });
 }
 
 async function promoteRun() {
@@ -846,6 +869,373 @@ function renderAb() {
     <p class="hint">Same simulator answered both rounds, so the lift is an upper bound. Confirm with a real test.</p>`;
 }
 
+// ---------------- review loop ----------------
+// Reviewer bots (the board lenses) read the pitch and the last run and post feedback; an editor
+// applies the fixes; the same buyers (same seed) judge the new version; the loop keeps the best.
+// Reviewers suggest, buyers judge: no bot grades its own work.
+const VERDICT_TAG = { fix: "FIX", ok: "OK", you: "YOUR CALL" };
+
+function reviewSourceLabel() {
+  return state.mode === "ai" ? "AI reviewers + AI buyers" : "rule reviewers + Quick sim buyers";
+}
+
+function reviewerFeedItem(reviewer, note, status) {
+  let item = $(`#feedList li[data-id="${reviewer.id}"]`);
+  if (!item) {
+    item = document.createElement("li");
+    item.dataset.id = reviewer.id;
+    item.className = "reviewer";
+    item.addEventListener("click", () => selectReviewer(reviewer.id));
+    item.addEventListener("mouseenter", () => arena.highlight(reviewer.id));
+    item.addEventListener("mouseleave", () => arena.highlight(state.selected));
+    $("#feedList").prepend(item);
+  }
+  const tag = status === "thinking"
+    ? '<span class="tag think">reviewing</span>'
+    : `<span class="tag review ${note.verdict}">${VERDICT_TAG[note.verdict] || "OK"}</span>`;
+  item.innerHTML = `<div class="who"><span><span class="dot review-dot"></span><b>${escapeHtml(reviewer.name)}</b> · reviewer</span>${tag}</div>
+    <div class="why">${status === "thinking" ? escapeHtml(reviewer.focus) : escapeHtml(note.note)}</div>`;
+  $("#feedCount").textContent = $$("#feedList li").length;
+}
+
+function selectReviewer(id) {
+  const reviewer = REVIEWERS.find((r) => r.id === id);
+  if (!reviewer) return;
+  const note = state.loop?.notes?.[id];
+  state.selected = id;
+  arena.highlight(id);
+  const card = $("#botCard");
+  card.hidden = false;
+  card.innerHTML = `<h4>${escapeHtml(reviewer.name)} · reviewer</h4>
+    <div class="sub">${escapeHtml(reviewer.focus)}</div>
+    <dl>
+      <dt>Lens</dt><dd>${escapeHtml(reviewer.lens)}</dd>
+      <dt>Verdict</dt><dd>${note ? `<span class="tag review ${note.verdict}">${VERDICT_TAG[note.verdict]}</span>` : "not reviewed yet"}</dd>
+      <dt>Feedback</dt><dd>${escapeHtml(note?.note || "–")}</dd>
+      ${note?.change ? `<dt>Change</dt><dd>${escapeHtml(note.change)}</dd>` : ""}
+      <dt>Engine</dt><dd>${escapeHtml(state.mode === "ai" ? "AI, one isolated call" : "rule check")}</dd>
+    </dl>`;
+}
+
+function highlightPitch(text) {
+  return escapeHtml(text)
+    .replace(/\[[^\]]+\]/g, (m) => `<mark class="slot">${m}</mark>`)
+    .replace(/\(confirm\)/g, '<mark class="slot">(confirm)</mark>');
+}
+
+function renderReview() {
+  const loop = state.loop;
+  const out = $("#reviewOut");
+  if (!loop) return;
+  const bar = Number($("#minBuyRate").value) || 0.25;
+  const best = loop.best;
+  const rows = loop.rounds.map((r) => `
+    <tr class="${r.kept ? "kept" : "dropped"}${best && r.version === best.version ? " best" : ""}">
+      <td>v${r.version}</td>
+      <td><b>${r.buys}/${r.n}</b> · ${pct(r.rate)}</td>
+      <td>${r.version === 0 ? "baseline" : `${r.delta > 0 ? "+" : ""}${Math.round(r.delta * 100)} pts`}</td>
+      <td>${r.version === 0 ? "your pitch" : r.kept ? "kept" : "reverted"}</td>
+      <td class="changes">${r.changes.length ? r.changes.map((c) => escapeHtml(c)).join("<br>") : "–"}</td>
+    </tr>`).join("");
+  const board = REVIEWERS.map((reviewer) => {
+    const note = loop.notes[reviewer.id];
+    const live = loop.activeReviewer === reviewer.id;
+    return `<li class="${live ? "live" : ""}">
+      <div class="rv-head"><b>${escapeHtml(reviewer.name)}</b>${live ? '<span class="tag think">reviewing</span>' : note ? `<span class="tag review ${note.verdict}">${VERDICT_TAG[note.verdict]}</span>` : '<span class="tag idle">waiting</span>'}</div>
+      <div class="rv-note">${escapeHtml(note?.note || reviewer.focus)}</div>
+    </li>`;
+  }).join("");
+  const yourCalls = Object.values(loop.yourCalls);
+  const slots = best ? placeholderCount(best.pitch) : 0;
+  const done = loop.status === "done";
+  out.innerHTML = `
+    <div class="loop-status ${done ? (best?.rate >= bar ? "good" : "bad") : ""}">
+      <strong>${escapeHtml(loop.headline)}</strong>
+      <span>${escapeHtml(loop.detail || "")}</span>
+    </div>
+    <p class="source-line">Source: ${escapeHtml(reviewSourceLabel())}. Reviewers suggest, the same ${loop.n || ""} buyers (seed ${loop.seed ?? "–"}) judge each version, and only a version that wins more buyers is kept.</p>
+    <div class="loop-grid">
+      <div>
+        <h3>Reviewers</h3>
+        <ul class="reviewer-board">${board}</ul>
+      </div>
+      <div>
+        <h3>Rounds</h3>
+        <table class="loop-table"><thead><tr><th>Version</th><th>Buy</th><th>vs best</th><th>Result</th><th>Changes</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Baseline running…</td></tr>'}</tbody></table>
+      </div>
+    </div>
+    ${best ? `<div class="best-pitch">
+      <div class="best-head"><h3>Best version: v${best.version} · ${best.buys}/${best.n} buy (${pct(best.rate)})</h3>
+      ${done ? '<span class="next-actions"><button class="primary" id="useBestBtn">Use as my pitch</button><button class="ghost" id="bestToBBtn">Send to offer B</button></span>' : ""}</div>
+      <pre>${highlightPitch(best.pitch)}</pre>
+      ${slots ? `<p class="hint">${slots} highlighted slot${slots === 1 ? "" : "s"} need${slots === 1 ? "s" : ""} your true answer before you use this pitch. The loop names the doubt; it never invents the answer.</p>` : ""}
+    </div>` : ""}
+    ${yourCalls.length ? `<div class="your-calls"><h3>Needs your facts or decision</h3><ul>${yourCalls.map((c) => `<li><b>${escapeHtml(c.reviewer)}</b>: ${escapeHtml(c.note)}</li>`).join("")}</ul></div>` : ""}
+    <p class="hint">${state.mode === "ai"
+      ? "The same simulator judged every version, so the lift is an upper bound. Check lines marked (confirm), then test with real buyers."
+      : "Quick sim counts a doubt as answered when the pitch uses its words, so the lift shows which doubts matter, not that your wording works. Fill each slot with a true answer, then re-check with AI buyers or a real test."}</p>`;
+  $("#useBestBtn")?.addEventListener("click", () => {
+    $("#pitch").value = best.pitch;
+    persistLocal();
+    renderObjections();
+    toast(`Pitch replaced with v${best.version}. Your previous pitch is v0 in the rounds table.`);
+  });
+  $("#bestToBBtn")?.addEventListener("click", () => {
+    $("#pitchB").value = best.pitch;
+    persistLocal();
+    document.querySelector('.tab[data-tab="ab"]')?.click();
+  });
+}
+
+async function aiCall(role, brief) {
+  const response = await api("/api/llm", {
+    role,
+    provider: $("#provider").value,
+    base_url: $("#baseUrl").value.trim() || undefined,
+    model: $("#model").value.trim() || undefined,
+    api_key: $("#apiKey").value.trim() || undefined,
+    brief,
+  });
+  return response.answer || {};
+}
+
+async function aiReview(reviewer, context) {
+  try {
+    const answer = await aiCall("reviewer", reviewerBrief(reviewer, context));
+    const verdict = ["fix", "ok", "you"].includes(answer.verdict) ? answer.verdict : "ok";
+    const change = String(answer.change || "").trim();
+    return { verdict: verdict === "fix" && !change ? "ok" : verdict, note: String(answer.note || "").trim() || "No comment.", change };
+  } catch (error) {
+    return { verdict: "ok", note: `No answer: ${friendlyError(error.message)}`, error: true };
+  }
+}
+
+async function aiEdit(context, notes) {
+  const answer = await aiCall("editor", editorBrief(context, notes));
+  const pitch = String(answer.pitch || "").trim();
+  if (!pitch) throw new Error("the editor returned no pitch");
+  const changes = Array.isArray(answer.changes) ? answer.changes.map(String).filter(Boolean) : [];
+  return { pitch, changes: changes.length ? changes : ["Rewrote the pitch"], answered: [] };
+}
+
+function reviewReport(loop) {
+  const lines = [
+    `# Review loop - ${state.customer.business || state.project}`,
+    "",
+    `Source: ${reviewSourceLabel()}. Same ${loop.n} buyers (seed ${loop.seed}) judged every version. Simulated buyers are an upper bound, not customers.`,
+    `Stopped: ${loop.detail}`,
+    "",
+    "| Version | Buy | vs best | Result | Changes |",
+    "|---|---|---|---|---|",
+    ...loop.rounds.map((r) => `| v${r.version} | ${r.buys}/${r.n} (${pct(r.rate)}) | ${r.version === 0 ? "baseline" : `${r.delta > 0 ? "+" : ""}${Math.round(r.delta * 100)} pts`} | ${r.version === 0 ? "your pitch" : r.kept ? "kept" : "reverted"} | ${r.changes.join("; ") || "-"} |`),
+    "",
+    `## Best version (v${loop.best.version})`,
+    "",
+    "```",
+    loop.best.pitch,
+    "```",
+    "",
+    "## Last feedback",
+    "",
+    ...REVIEWERS.map((r) => `- **${r.name}** (${VERDICT_TAG[loop.notes[r.id]?.verdict] || "-"}): ${loop.notes[r.id]?.note || "-"}`),
+  ];
+  return lines.join("\n") + "\n";
+}
+
+async function runReviewLoop() {
+  if (state.running) return;
+  if (state.mode === "replay") return toast("The review loop needs Quick sim or AI buyers. Pick one at the top.", true);
+  const problems = readSetup();
+  if (problems.length) return toast(`Add ${problems.join(", ")} first.`, true);
+  const startPitch = $("#pitch").value.trim();
+  const price = Number($("#price").value) || 0;
+  if (!price) return toast("Set a price first.", true);
+  const maxRounds = Math.max(1, Math.min(6, Number($("#loopRounds").value) || 3));
+  const bar = Number($("#minBuyRate").value) || 0.25;
+  const objections = state.customer.objections;
+  const overrides = { ...state.addressed };
+  const addressedFor = (pitch, answered) => ({
+    ...answeredMap(objections, pitch, overrides),
+    ...Object.fromEntries(answered.map((o) => [o, true])),
+  });
+  const loop = {
+    status: "running", rounds: [], notes: {}, yourCalls: {}, best: null, stop: false,
+    headline: "Baseline: your pitch", detail: "The buyers read your current pitch first.", seed: null, n: 0,
+  };
+  state.loop = loop;
+  state.running = true;
+  document.documentElement.dataset.run = "running";
+  state.skip = params.get("skip") === "1";
+  setRunButtons(true);
+  $("#skipBtn").hidden = state.skip;
+  $("#loopStopBtn").hidden = false;
+  document.querySelector('.tab[data-tab="review"]')?.click();
+  const variant = `${variantName("A")}-review`;
+  const stallTitle = () => state.customer.business || state.project;
+  try {
+    arena.spawnReviewers(REVIEWERS);
+    arena.setSpeed(speed());
+    renderReview();
+    arena.setStall(stallTitle(), `${priceLabel()} · v0`);
+    let run = await executeRun({
+      pitch: startPitch, seed: Number($("#seed").value) || undefined, variant, price,
+      title: "Review loop · v0 (your pitch)", addressed: addressedFor(startPitch, []),
+    });
+    arena.setStall(stallTitle(), `${priceLabel()} · v0`);
+    loop.seed = run.seed;
+    loop.n = run.personas.length;
+    loop.best = { version: 0, pitch: startPitch, rate: run.rate, buys: run.buys, n: run.answers.length, run, answered: [] };
+    loop.rounds.push({ version: 0, rate: run.rate, buys: run.buys, n: run.answers.length, delta: 0, kept: true, changes: [] });
+    const tried = new Set();
+    let stale = 0;
+    let stopReason = "";
+    for (let round = 1; round <= maxRounds; round++) {
+      const best = loop.best;
+      if (best.rate >= bar) {
+        stopReason = `Target met: ${best.buys}/${best.n} buy (${pct(best.rate)}), your bar is ${pct(bar)}.`;
+        break;
+      }
+      if (loop.stop) {
+        stopReason = "Stopped by you.";
+        break;
+      }
+      loop.headline = `Round ${round} of ${maxRounds}: reviewers read v${best.version}`;
+      loop.detail = `Best so far ${best.buys}/${best.n} (${pct(best.rate)}). Target ${pct(bar)}.`;
+      updateHud(best.run.answers, best.run.personas.length, `round ${round}: reviewing`);
+      const localCurve = vanWestendorp(best.run.answers);
+      const context = {
+        business: state.customer.business,
+        pitch: best.pitch,
+        answers: best.run.answers,
+        personas: best.run.personas,
+        objections,
+        overrides: { ...overrides, ...Object.fromEntries(best.answered.map((o) => [o, true])) },
+        tried,
+        claimed: new Set(),
+        price,
+        priceLabel: priceLabel(),
+        priceRange: best.run.serverPricing?.range || (localCurve ? [localCurve.points.PMC, localCurve.points.PME] : null),
+      };
+      const notes = [];
+      for (const reviewer of REVIEWERS) {
+        if (loop.stop) break;
+        loop.activeReviewer = reviewer.id;
+        renderReview();
+        reviewerFeedItem(reviewer, null, "thinking");
+        await pause(arena.reviewerInspect(reviewer.id));
+        arena.reviewerThink(reviewer.id);
+        setTicker(`<span class="dot review-dot"></span><span><b>${escapeHtml(reviewer.name)}</b> is reading v${best.version}: ${escapeHtml(reviewer.focus.toLowerCase())}…</span>`);
+        let note;
+        if (state.mode === "ai") {
+          note = await aiReview(reviewer, context);
+        } else {
+          await pause(900 / speed());
+          note = ruleReview(reviewer, context);
+        }
+        if (note.fix?.objection) context.claimed.add(note.fix.objection);
+        notes.push({ reviewer: reviewer.name, id: reviewer.id, ...note });
+        loop.notes[reviewer.id] = note;
+        if (note.verdict === "you") loop.yourCalls[reviewer.id] = { reviewer: reviewer.name, note: note.note };
+        else delete loop.yourCalls[reviewer.id];
+        loop.activeReviewer = null;
+        reviewerFeedItem(reviewer, note, "done");
+        setTicker(`<span class="dot review-dot"></span><span><b>${escapeHtml(reviewer.name)}</b> &rarr; <b>${VERDICT_TAG[note.verdict]}</b>: ${escapeHtml(note.note)}</span>`);
+        if (state.selected === reviewer.id) selectReviewer(reviewer.id);
+        renderReview();
+        await pause(arena.reviewerVerdict(reviewer.id, note.verdict) * 0.6);
+      }
+      if (loop.stop) {
+        stopReason = "Stopped by you.";
+        break;
+      }
+      const fixes = notes.filter((n) => n.verdict === "fix");
+      if (!fixes.length) {
+        stopReason = "No reviewer has a fix the loop can make on its own. What is left needs your facts or decisions.";
+        break;
+      }
+      loop.headline = `Round ${round} of ${maxRounds}: editor applies ${fixes.length} fix${fixes.length === 1 ? "" : "es"}`;
+      renderReview();
+      setTicker(`<span class="dot review-dot"></span><span><b>Editor</b> is writing v${round} from ${fixes.length} reviewer fix${fixes.length === 1 ? "" : "es"}…</span>`);
+      let next;
+      if (state.mode === "ai") {
+        next = await aiEdit(context, notes);
+      } else {
+        await pause(700 / speed());
+        next = applyFixes(best.pitch, fixes.map((n) => n.fix), { priceLabel: priceLabel() });
+      }
+      for (const n of fixes) tried.add(n.fix?.objection || n.change);
+      if (next.pitch.trim() === best.pitch.trim()) {
+        stopReason = "The fixes did not change the pitch.";
+        break;
+      }
+      loop.headline = `Round ${round} of ${maxRounds}: the same buyers read v${round}`;
+      renderReview();
+      arena.setStall(stallTitle(), `${priceLabel()} · v${round}`);
+      const answered = [...best.answered, ...next.answered];
+      run = await executeRun({
+        pitch: next.pitch, seed: loop.seed, variant, price,
+        title: `Review loop · v${round}`, addressed: addressedFor(next.pitch, answered),
+      });
+      arena.setStall(stallTitle(), `${priceLabel()} · v${round}`);
+      const candidate = { version: round, pitch: next.pitch, rate: run.rate, buys: run.buys, n: run.answers.length, run, answered };
+      const kept = keepBest(best, candidate);
+      loop.rounds.push({ version: round, rate: run.rate, buys: run.buys, n: run.answers.length, delta: run.rate - best.rate, kept, changes: next.changes });
+      if (kept) {
+        loop.best = candidate;
+        stale = 0;
+      } else {
+        stale += 1;
+      }
+      renderReview();
+      if (stale >= 2) {
+        stopReason = "Two rounds in a row without a gain.";
+        break;
+      }
+    }
+    const best = loop.best;
+    if (!stopReason) {
+      stopReason = best.rate >= bar
+        ? `Target met: ${best.buys}/${best.n} buy (${pct(best.rate)}).`
+        : `${maxRounds} round${maxRounds === 1 ? "" : "s"} done. Best ${best.buys}/${best.n} (${pct(best.rate)}), below your ${pct(bar)} target.`;
+    }
+    // Leave the best version (not the last try) on disk and on screen.
+    if (state.current !== best.run) {
+      await api("/api/deal", { name: state.project, variant, customer: state.customer, pitch: best.pitch, n: loop.n, seed: loop.seed });
+      const saved = await api("/api/answers", { name: state.project, variant, answers: best.run.answers, price });
+      best.run.serverResults = saved.results;
+      state.current = best.run;
+      renderResults(best.run.answers, best.run.personas, saved.results, `Review loop · best v${best.version}`);
+      updateHud(best.run.answers, best.run.personas.length, `best: v${best.version}`);
+    }
+    const start = loop.rounds[0];
+    loop.status = "done";
+    loop.headline = best.version === 0
+      ? `No version beat your pitch (${start.buys}/${start.n})`
+      : `v${best.version} wins ${best.buys}/${best.n} (${pct(best.rate)}), up from ${start.buys}/${start.n} (${pct(start.rate)})`;
+    loop.detail = stopReason;
+    renderReview();
+    setTicker(`<span><b>Review loop done.</b> ${escapeHtml(loop.headline)}. ${escapeHtml(stopReason)}</span><button class="ghost" id="tickerReview">See review</button>`, best.rate >= bar ? "good" : "bad");
+    $("#tickerReview")?.addEventListener("click", () => document.querySelector('.tab[data-tab="review"]')?.click());
+    api("/api/save", { name: state.project, file: "review-loop.md", content: reviewReport(loop) }).catch(() => {});
+    document.documentElement.dataset.run = "done";
+  } catch (error) {
+    document.documentElement.dataset.run = "stopped";
+    loop.status = "done";
+    loop.headline = "The loop stopped";
+    loop.detail = friendlyError(error.message);
+    renderReview();
+    toast(friendlyError(error.message), true, 8000);
+  } finally {
+    state.running = false;
+    state.skip = false;
+    loop.activeReviewer = null;
+    $("#skipBtn").hidden = true;
+    $("#loopStopBtn").hidden = true;
+    setRunButtons(false);
+    refreshProjectList().catch(() => {});
+  }
+}
+
 // ---------------- verdict ----------------
 // One recommended next step, derived from compile.py's first failing check.
 function nextTestFor(verdict, checkLines) {
@@ -900,6 +1290,12 @@ $("#skipBtn").addEventListener("click", () => {
   $("#skipBtn").hidden = true;
 });
 $("#runAbBtn").addEventListener("click", () => runPanel("B"));
+$("#loopBtn").addEventListener("click", runReviewLoop);
+$("#loopStopBtn").addEventListener("click", () => {
+  if (state.loop) state.loop.stop = true;
+  $("#loopStopBtn").hidden = true;
+  toast("The loop stops after the current step.");
+});
 $("#verdictBtn").addEventListener("click", computeVerdict);
 $("#speed").addEventListener("input", () => arena.setSpeed(speed()));
 $("#minBuyRate").addEventListener("input", () => updateHud(state.current?.answers || [], state.current?.personas.length || 0, $("#stateText").textContent));
@@ -934,7 +1330,8 @@ loadProjects().then(async () => {
   if (params.get("speed")) $("#speed").value = params.get("speed");
   const autoMode = params.get("mode");
   if (autoMode) $(`.seg[data-mode="${autoMode}"]`)?.click();
-  if (params.get("autorun")) await runPanel("A");
+  if (params.get("autorun") === "review") await runReviewLoop();
+  else if (params.get("autorun")) await runPanel("A");
 }).catch((error) => toast(`Could not load projects: ${error.message}`, true, 10000));
 
 document.getElementById("hintOpen")?.addEventListener("click", () => {

@@ -41,6 +41,9 @@ The 3D arena (`js/arena.js`) reads every colour from these tokens; there are no 
 
 - Decided bots in the arena carry a 2-letter name chip coloured by decision; hover or select expands it
   to the full name. Hovering a feed entry highlights its bot; clicking a bot selects its feed entry.
+- Reviewer bots (review loop) are light grey with an accent-blue cap, a clipboard and an accent floor
+  ring, so they never read as buyers. Their row sits in front of the stall; their labels always show,
+  bordered blue (FIX), green (OK) or grey (YOUR CALL). Amber still means thinking.
 - First-run setup shows only Business, Target buyer, Price and Pitch. Market anchor, notes, buyer
   details and the AI model settings sit behind disclosure (the AI section appears only in AI mode).
 - Phone (<= 760 px): brand + Run on one row, then project and mode rows; arena, live feed, results,

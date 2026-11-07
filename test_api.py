@@ -5,11 +5,13 @@
 Starts its own server on a temporary copy of the demo project, so it never touches
 your real projects. Exit code 0 = all checks pass.
 """
+import http.server
 import json
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -167,11 +169,81 @@ def test_no_panel_is_incomplete(workspace):
     expect("compile.py: good numbers without a panel = Incomplete", "Incomplete" in completed.stdout, completed.stdout.strip()[:80])
 
 
+def start_model_stub(port):
+    """A tiny OpenAI-compatible stub: answers by role (buyer / reviewer / editor) and records system prompts."""
+    seen = []
+
+    class Stub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            system = body["messages"][0]["content"]
+            seen.append(system)
+            if "reviewer on a startup board" in system:
+                content = {"verdict": "fix", "note": "Answer the top doubt.", "change": "Add one line on taste."}
+            elif "copy editor" in system:
+                content = {"pitch": "Stub pitch v2. $6.50 a cup.", "changes": ["Added a taste line (confirm)"]}
+            else:
+                content = {"buys": True, "purchases_first_month": 1, "reason_code": "need", "reason": "stub",
+                           "would_change_my_mind": "", "price_too_cheap": 2, "price_cheap": 4,
+                           "price_expensive": 7, "price_too_expensive": 10}
+            data = json.dumps({"choices": [{"message": {"content": json.dumps(content)}}]}).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Stub)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, seen
+
+
+def test_review_loop_api(workspace):
+    """The review loop's server side: review variant, reviewer/editor roles, the review report."""
+    root = workspace / "review-projects"
+    shutil.copytree(DEMO, root / "demo-matcha")
+    process, base = start_server(root, 18794)
+    call, status_of = make_caller(base)
+    stub, seen = start_model_stub(18795)
+    stub_url = "http://127.0.0.1:18795/v1"
+    try:
+        expect("review.js served", status_of("/js/review.js") == 200)
+        customer = json.loads((DEMO / "customer.json").read_text(encoding="utf-8"))
+        code, first = call("/api/deal", {"name": "demo-matcha", "variant": "panel-quick-review", "customer": customer,
+                                         "pitch": "v0 pitch", "n": 20, "seed": 777})
+        code2, second = call("/api/deal", {"name": "demo-matcha", "variant": "panel-quick-review", "customer": customer,
+                                           "pitch": "v1 pitch with a new line", "n": 20, "seed": 777})
+        same = code == 200 and code2 == 200 and [p["name"] for p in first["personas"]] == [p["name"] for p in second["personas"]]
+        expect("review rounds keep the same buyers (same seed)", same)
+        expect("each round's brief carries the new pitch", code2 == 200 and "v1 pitch with a new line" in second["briefs"]["P001"])
+
+        code, reviewed = call("/api/llm", {"role": "reviewer", "base_url": stub_url, "api_key": "stub", "brief": "review this"})
+        expect("reviewer role reaches the model with the reviewer prompt",
+               code == 200 and reviewed["answer"]["verdict"] == "fix" and "reviewer on a startup board" in seen[-1], reviewed)
+        code, edited = call("/api/llm", {"role": "editor", "base_url": stub_url, "api_key": "stub", "brief": "rewrite"})
+        expect("editor role returns a new pitch", code == 200 and edited["answer"]["pitch"].startswith("Stub pitch"), edited)
+        code, bought = call("/api/llm", {"base_url": stub_url, "api_key": "stub", "brief": "buyer brief"})
+        expect("buyer role is still the default", code == 200 and "simulated buyer" in seen[-1], bought)
+        code, _ = call("/api/llm", {"role": "judge", "base_url": stub_url, "brief": "x"})
+        expect("unknown bot roles are refused", code == 400)
+
+        code, _ = call("/api/save", {"name": "demo-matcha", "file": "review-loop.md", "content": "# Review loop\n"})
+        report = root / "demo-matcha" / "review-loop.md"
+        expect("review report saved to the project", code == 200 and report.read_text(encoding="utf-8").startswith("# Review loop"))
+    finally:
+        stub.shutdown()
+        process.kill()
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as temp:
         workspace = Path(temp)
         test_folder_of_projects(workspace)
         test_single_founder_folder(workspace)
         test_no_panel_is_incomplete(workspace)
+        test_review_loop_api(workspace)
     print(f"\n{len(failures)} failure(s)")
     sys.exit(1 if failures else 0)

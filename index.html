@@ -132,6 +132,7 @@
         <button class="tab" data-tab="numbers">Numbers</button>
         <button class="tab" data-tab="competitors">Competitors</button>
         <button class="tab" data-tab="ab">A/B offer</button>
+        <button class="tab" data-tab="review">Review loop</button>
         <button class="tab" data-tab="verdict">Verdict</button>
       </nav>
       <div class="panels">
@@ -157,6 +158,28 @@
               <button id="runAbBtn" class="primary">Run B with the same buyers</button>
             </div>
             <div id="abResult"><p class="empty">Run panel A first, then B.</p></div>
+          </div>
+        </section>
+        <section id="tab-review" class="panel">
+          <div class="review-head">
+            <div>
+              <h3>Review loop</h3>
+              <p class="hint">Five reviewer bots apply the board lenses to your pitch and the last run. An editor applies their fixes, the same buyers judge the new version, and the loop keeps a version only when more of them buy. Your pitch is only replaced if you press <b>Use as my pitch</b>.</p>
+            </div>
+            <div class="review-controls">
+              <label>Rounds<input id="loopRounds" type="number" min="1" max="6" step="1" value="3"></label>
+              <button id="loopBtn" class="primary">Start review loop</button>
+              <button id="loopStopBtn" class="ghost" hidden>Stop after this step</button>
+            </div>
+          </div>
+          <div id="reviewOut">
+            <ol class="empty how">
+              <li><b>Baseline:</b> the buyers read your current pitch.</li>
+              <li><b>Review:</b> the Offers, Product and Monopoly lenses, a clarity check and the CFO lens walk up to the stall, read the pitch and the results, and post FIX, OK or YOUR CALL.</li>
+              <li><b>Fix:</b> an editor applies the FIX items. YOUR CALL items (facts, prices) stay with you.</li>
+              <li><b>Judge:</b> the same buyers (same seed) read the new version. More buyers: kept. Fewer or equal: reverted.</li>
+              <li>Repeats until your target is met, the rounds run out, or two rounds bring no gain.</li>
+            </ol>
           </div>
         </section>
         <section id="tab-verdict" class="panel">

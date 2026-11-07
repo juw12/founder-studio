@@ -207,12 +207,63 @@ class Bot {
   }
 }
 
+// Reviewer bots apply one board lens each. They look different from buyers on purpose:
+// light body, accent cap and a clipboard, and an accent ring on the floor.
+const REVIEW_COLORS = { fix: THEME.accent, ok: BUY_COLOR, you: 0x94a3b8 };
+
+class ReviewerBot extends Bot {
+  constructor(reviewer, spawn) {
+    super({ id: reviewer.id, name: reviewer.name }, 0xcbd5e1, spawn);
+    this.reviewer = reviewer;
+    const accent = new THREE.MeshStandardMaterial({ color: THEME.accent, roughness: 0.4, metalness: 0.1 });
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.33, 0.1, 24), accent);
+    cap.position.y = 1.7;
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.18), accent);
+    brim.position.set(0, 1.66, 0.3);
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(0.38, 0.48, 0.04),
+      new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 })
+    );
+    board.position.set(0.18, 0.85, 0.36);
+    board.rotation.x = -0.35;
+    const clip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.05), accent);
+    clip.position.set(0.18, 1.08, 0.3);
+    this.rig.add(cap, brim, board, clip);
+    this.homeRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.4, 0.5, 32),
+      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.8 })
+    );
+    this.homeRing.rotation.x = -Math.PI / 2;
+    this.homeRing.position.y = 0.03;
+    this.group.add(this.homeRing);
+    this.state = "idle";
+  }
+
+  setVerdict(verdict) {
+    this.state = "reviewed";
+    this.ring.visible = false;
+    const color = REVIEW_COLORS[verdict] ?? REVIEW_COLORS.ok;
+    this.bulbMaterial.color.setHex(color);
+    this.eyeMaterial.color.setHex(color);
+    this.homeRing.material.color.setHex(color);
+    this.jump = verdict === "fix" ? 1 : 0;
+  }
+
+  clearVerdict() {
+    this.state = "idle";
+    this.bulbMaterial.color.setHex(0x9aa4b8);
+    this.eyeMaterial.color.setHex(0x7dd3fc);
+    this.homeRing.material.color.setHex(THEME.accent);
+  }
+}
+
 export class Arena {
   constructor(container, { onSelect } = {}) {
     this.container = container;
     this.onSelect = onSelect;
     this.bots = new Map();
     this.labels = new Map();
+    this.reviewers = new Map();
     this.buySlots = 0;
     this.passSlots = 0;
     this.stallSlots = 0;
@@ -340,7 +391,7 @@ export class Arena {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects([...this.bots.values()].map((b) => b.group), true);
+    const hits = this.raycaster.intersectObjects([...this.bots.values(), ...this.reviewers.values()].map((b) => b.group), true);
     for (const hit of hits) {
       let node = hit.object;
       while (node && !node.userData.botId) node = node.parent;
@@ -381,7 +432,8 @@ export class Arena {
   reset() {
     for (const bot of this.bots.values()) this.scene.remove(bot.group);
     this.bots.clear();
-    this.labelLayer.innerHTML = "";
+    // Buyer labels go; reviewer labels stay with their bots.
+    for (const label of this.labels.values()) label.remove();
     this.labels.clear();
     this.buySlots = 0;
     this.passSlots = 0;
@@ -417,7 +469,7 @@ export class Arena {
 
   setSpeed(factor) {
     this.speedFactor = factor;
-    for (const bot of this.bots.values()) bot.speed = 3.2 * factor;
+    for (const bot of [...this.bots.values(), ...this.reviewers.values()]) bot.speed = 3.2 * factor;
   }
 
   // Milliseconds until the bot reaches its current target.
@@ -464,15 +516,83 @@ export class Arena {
     }
   }
 
+  // ---------- reviewer bots ----------
+  reviewerHome(index, total) {
+    const gap = 1.6;
+    return new THREE.Vector3((index - (total - 1) / 2) * gap, 0, 5.4);
+  }
+
+  spawnReviewers(reviewers) {
+    reviewers.forEach((reviewer, index) => {
+      if (this.reviewers.has(reviewer.id)) {
+        this.reviewers.get(reviewer.id).clearVerdict();
+        return;
+      }
+      const home = this.reviewerHome(index, reviewers.length);
+      const bot = new ReviewerBot(reviewer, new THREE.Vector3(home.x, 0, 16));
+      bot.home = home;
+      bot.speed = 3.2 * this.speedFactor;
+      bot.walkTo(home);
+      this.scene.add(bot.group);
+      this.reviewers.set(reviewer.id, bot);
+      const label = document.createElement("div");
+      label.className = "bot-label reviewer";
+      label.innerHTML = '<span class="nm"></span>';
+      label.querySelector(".nm").textContent = reviewer.name;
+      label.setAttribute("aria-label", `${reviewer.name} (reviewer)`);
+      label.addEventListener("click", () => this.onSelect?.(reviewer.id));
+      this.labelLayer.appendChild(label);
+      this.reviewerLabels ||= new Map();
+      this.reviewerLabels.set(reviewer.id, label);
+    });
+  }
+
+  // Walk up to the stall to read the pitch. Returns the walk time in ms.
+  reviewerInspect(id) {
+    const bot = this.reviewers.get(id);
+    if (!bot) return 0;
+    bot.clearVerdict();
+    bot.state = "walking";
+    bot.walkTo(new THREE.Vector3(bot.home.x * 0.55, 0, 3.4));
+    return this.travelMs(bot);
+  }
+
+  reviewerThink(id) {
+    const bot = this.reviewers.get(id);
+    if (!bot) return;
+    bot.setThinking();
+    const label = this.reviewerLabels?.get(id);
+    if (label) label.dataset.state = "thinking";
+  }
+
+  // Post the verdict (fix / ok / you) and walk back to the reviewers' row.
+  reviewerVerdict(id, verdict) {
+    const bot = this.reviewers.get(id);
+    if (!bot) return 0;
+    bot.setVerdict(verdict);
+    bot.walkTo(bot.home);
+    const label = this.reviewerLabels?.get(id);
+    if (label) label.dataset.state = verdict;
+    return this.travelMs(bot);
+  }
+
+  clearReviewers() {
+    for (const bot of this.reviewers.values()) this.scene.remove(bot.group);
+    this.reviewers.clear();
+    for (const label of this.reviewerLabels?.values() || []) label.remove();
+    this.reviewerLabels?.clear();
+  }
+
   highlight(id) {
     this.selectedId = id;
     for (const [botId, label] of this.labels) label.classList.toggle("selected", botId === id);
+    for (const [botId, label] of this.reviewerLabels || []) label.classList.toggle("selected", botId === id);
   }
 
   // Snap every bot to its target - used at the end of a run, because browsers
   // throttle animation frames in background tabs and the walk can lag behind.
   settle() {
-    for (const bot of this.bots.values()) {
+    for (const bot of [...this.bots.values(), ...this.reviewers.values()]) {
       bot.group.position.x = bot.target.x;
       bot.group.position.z = bot.target.z;
     }
@@ -482,7 +602,7 @@ export class Arena {
     const dt = Math.min(0.05, this.clock.getDelta());
     const time = this.clock.elapsedTime;
     let anyMoving = false;
-    for (const bot of this.bots.values()) anyMoving = bot.update(dt, time) || anyMoving;
+    for (const bot of [...this.bots.values(), ...this.reviewers.values()]) anyMoving = bot.update(dt, time) || anyMoving;
     if (!anyMoving && !this.dragging) {
       this.orbit.azimuth += dt * 0.03;
       this.updateCamera();
@@ -518,6 +638,25 @@ export class Arena {
         w: 64,
         h: 26,
         priority: selected ? 0 : rank[bot.state],
+        x: offsetLeft + ((projected.x + 1) / 2) * width,
+        y: offsetTop + ((1 - projected.y) / 2) * height,
+      });
+    }
+    // Reviewer labels always show (5 at most) and win over buyer labels.
+    for (const [id, bot] of this.reviewers) {
+      const label = this.reviewerLabels.get(id);
+      projected.set(bot.group.position.x, 2.75, bot.group.position.z).project(this.camera);
+      if (projected.z >= 1) {
+        label.style.display = "none";
+        continue;
+      }
+      candidates.push({
+        label,
+        bot,
+        compact: false,
+        w: 92,
+        h: 24,
+        priority: id === this.selectedId ? 0 : bot.state === "thinking" ? 0.5 : 0.8,
         x: offsetLeft + ((projected.x + 1) / 2) * width,
         y: offsetTop + ((1 - projected.y) / 2) * height,
       });

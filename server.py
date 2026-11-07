@@ -27,6 +27,22 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,60}$")
 VARIANT_RE = re.compile(r"^panel(-[a-z0-9-]{1,40})?$")
+
+# One system prompt per bot role. Buyers decide; reviewers apply one board lens; the editor rewrites.
+SYSTEM_PROMPTS = {
+    "buyer": (
+        "You are one simulated buyer on a consumer panel. Answer exactly as instructed in the brief. "
+        "Reply with ONLY the JSON object the brief asks for. Do not be agreeable; most people do not buy most things."
+    ),
+    "reviewer": (
+        "You are one reviewer on a startup board and apply only the lens named in the brief. "
+        "Be specific and blunt, never invent facts, and reply with ONLY the JSON object the brief asks for."
+    ),
+    "editor": (
+        "You are a careful copy editor for a small business pitch. Apply the requested changes, keep every true fact, "
+        "never invent facts or offers, and reply with ONLY the JSON object the brief asks for."
+    ),
+}
 WRITE_LOCK = threading.Lock()
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -248,7 +264,7 @@ class Studio:
         return {"cfo": base, "what_ifs": what_ifs}
 
     def save_file(self, body):
-        allowed = {"idea.md", "competitors.md", "pitch.md", "offer.md", "marketing.md", "brand.md", "ops.md", "launch.md"}
+        allowed = {"idea.md", "competitors.md", "pitch.md", "offer.md", "marketing.md", "brand.md", "ops.md", "launch.md", "review-loop.md"}
         file_name = body.get("file")
         if file_name not in allowed:
             raise ValueError(f"can only save {sorted(allowed)}")
@@ -272,10 +288,10 @@ class Studio:
         provider = body.get("provider", "openai")
         model = body.get("model") or ""
         brief = body["brief"]
-        system = (
-            "You are one simulated buyer on a consumer panel. Answer exactly as instructed in the brief. "
-            "Reply with ONLY the JSON object the brief asks for. Do not be agreeable; most people do not buy most things."
-        )
+        role = body.get("role", "buyer")
+        if role not in SYSTEM_PROMPTS:
+            raise ValueError(f"unknown role {role!r}")
+        system = SYSTEM_PROMPTS[role]
         if provider == "anthropic":
             key = body.get("api_key") or os.environ.get("ANTHROPIC_API_KEY", "")
             url = (body.get("base_url") or "https://api.anthropic.com").rstrip("/") + "/v1/messages"

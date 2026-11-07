@@ -27,7 +27,7 @@ cd founder-studio
 python server.py                         # opens the demo project in ./projects
 python server.py --root path/to/founder  # one founder folder from the skill = one project
 python server.py --root path/to/ideas    # a folder with one sub-folder per idea
-python test_api.py                       # 17 smoke checks on temporary folders
+python test_api.py                       # 25 smoke checks on temporary folders
 ```
 
 - The server prints its URL (default `http://127.0.0.1:8777`, next free port if busy).
@@ -35,7 +35,7 @@ python test_api.py                       # 17 smoke checks on temporary folders
   - If the root itself holds `customer.json`, `numbers.json` or `idea.md`, it opens as a single project.
 - `--tools` is optional. The skill's scripts are bundled in `tools/`. When the app is installed inside the
   skill (`ambitious-founder/studio/`), it uses the skill's `tools/` instead.
-- URL options: `?project=demo-matcha&mode=quick|ai|replay&autorun=1&speed=1..4`.
+- URL options: `?project=demo-matcha&mode=quick|ai|replay&autorun=1|review&speed=1..4`.
 
 ## Modes
 
@@ -46,6 +46,19 @@ python test_api.py                       # 17 smoke checks on temporary folders
 | Replay | The saved official `panel/` answers, animated | nothing | — |
 
 - **A/B offer** deals the *same buyers* (same seed) to pitch B and shows which buyers you won or lost.
+- **Review loop** (tab, or *Auto-fix with reviewers* under Results) puts five reviewer bots in the arena:
+  the skill's Offers, Product and Monopoly lenses (`lenses.md`), a clarity check and the CFO lens.
+  - Each round they walk up to the stall, read the pitch and the last run, and post **FIX**, **OK** or
+    **YOUR CALL**. An editor applies the FIX items, then the same buyers (same seed) judge the new version.
+  - A version is kept only when strictly more buyers buy; otherwise it is reverted and that fix is not tried again.
+    Stops at your target, the round limit, or two rounds without a gain.
+  - Reviewers suggest, buyers judge: no bot grades its own work. YOUR CALL items (a real difference
+    from rivals, a price change) stay with you; the loop never changes the price.
+  - Quick sim: rule reviewers; the editor adds a line per doubt with a `[your one-line answer]` slot,
+    because it must not invent facts. AI mode: each reviewer and the editor is one isolated model call;
+    new claims are marked `(confirm)`.
+  - Your pitch changes only when you press *Use as my pitch*. Runs go to `panel-quick-review/` or
+    `panel-ai-review/` and a summary to `review-loop.md`; none of it counts for the verdict.
 - **AI models:** any OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, OpenRouter) or Anthropic.
   - The key can come from the form (it is not saved to disk) or from `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
 - **Tabs:**
