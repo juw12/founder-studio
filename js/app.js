@@ -44,6 +44,12 @@ const fmt = (value) => {
   return abs >= 1000 ? Math.round(value).toLocaleString() : (Math.round(value * 100) / 100).toLocaleString();
 };
 const pct = (value) => (value === null || value === undefined ? "–" : `${Math.round(value * 100)}%`);
+// Prices and money: always 2 decimals below 1,000 (6.5 -> 6.50), whole numbers above.
+const money = (value) => {
+  if (value === null || value === undefined || Number.isNaN(value)) return "–";
+  if (Math.abs(value) >= 1000) return Math.round(value).toLocaleString();
+  return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : {
@@ -473,14 +479,14 @@ function selectBot(id) {
   card.innerHTML = `<h4>${escapeHtml(persona.name)} · ${escapeHtml(persona.age)}</h4>
     <div class="sub">${escapeHtml(persona.segment)} · ${escapeHtml(persona.behaviour)}</div>
     <dl>
-      <dt>Income</dt><dd>${fmt(persona.income)}</dd>
+      <dt>Income</dt><dd>${money(persona.income)}</dd>
       <dt>First doubt</dt><dd>${escapeHtml(persona.objection)}</dd>
       <dt>Habit</dt><dd>${escapeHtml(persona.habit || "")}</dd>
       ${answer ? `
       <dt>Decision</dt><dd>${answer.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>'} · ${escapeHtml(answer.reason_code)}</dd>
       <dt>Why</dt><dd>${escapeHtml(answer.reason)}</dd>
       <dt>Would flip</dt><dd>${escapeHtml(answer.would_change_my_mind || "–")}</dd>
-      <dt>Prices</dt><dd>too cheap ${fmt(answer.price_too_cheap)} · cheap ${fmt(answer.price_cheap)} · expensive ${fmt(answer.price_expensive)} · too expensive ${fmt(answer.price_too_expensive)}</dd>
+      <dt>Prices</dt><dd>too cheap ${money(answer.price_too_cheap)} · cheap ${money(answer.price_cheap)} · expensive ${money(answer.price_expensive)} · too expensive ${money(answer.price_too_expensive)}</dd>
       <dt>Engine</dt><dd>${escapeHtml(answer._engine || run.engine)}</dd>` : "<dt>Status</dt><dd>deciding…</dd>"}
     </dl>`;
 }
@@ -726,16 +732,16 @@ function renderResults(answers, personas, server, title) {
   const priceRange = state.current?.serverPricing?.range || (localCurve ? [localCurve.points.PMC, localCurve.points.PME] : null);
   const yourPrice = Number($("#price").value) || 0;
   // Price lever: only suggest a price change when the price sits outside the simulated acceptable range.
-  const rangeText = priceRange?.[0] && priceRange?.[1] ? `${fmt(priceRange[0])} to ${fmt(priceRange[1])}` : "";
+  const rangeText = priceRange?.[0] && priceRange?.[1] ? `${money(priceRange[0])} to ${money(priceRange[1])}` : "";
   const stopsText = `Price also stops <b>${priceCount}</b> buyer${priceCount === 1 ? "" : "s"}`;
   let priceLever = "";
   if (topCode !== "price" && priceCount && rangeText) {
     if (yourPrice > priceRange[1]) {
-      priceLever = ` ${stopsText}, and ${fmt(yourPrice)} is above the simulated acceptable range (${rangeText}): also try <b>${fmt(priceRange[1])}</b>.`;
+      priceLever = ` ${stopsText}, and ${money(yourPrice)} is above the simulated acceptable range (${rangeText}): also try <b>${money(priceRange[1])}</b>.`;
     } else if (yourPrice < priceRange[0]) {
-      priceLever = ` ${stopsText}; ${fmt(yourPrice)} is below the simulated acceptable range (${rangeText}), so a low price may read as low quality.`;
+      priceLever = ` ${stopsText}; ${money(yourPrice)} is below the simulated acceptable range (${rangeText}), so a low price may read as low quality.`;
     } else {
-      priceLever = ` ${stopsText}, but ${fmt(yourPrice)} sits inside the simulated acceptable range (${rangeText}), so fix the message before the price.`;
+      priceLever = ` ${stopsText}, but ${money(yourPrice)} sits inside the simulated acceptable range (${rangeText}), so fix the message before the price.`;
     }
   }
   state.summary = { buys, n: answers.length, rate, bar, topReason: passReasons[0] };
@@ -795,13 +801,13 @@ function renderPricing(answers, serverPricing) {
   const points = serverPricing?.points || curve.points;
   const range = serverPricing?.range || [points.PMC, points.PME];
   const marker = (label, value, color) => value == null ? "" : `<line x1="${x(value)}" x2="${x(value)}" y1="${P - 6}" y2="${H - P + 6}" stroke="${color}" stroke-dasharray="3 4"/>
-    <text x="${x(value) + 4}" y="${P + 4}" fill="${color}" font-size="11">${label} ${fmt(value)}</text>`;
+    <text x="${x(value) + 4}" y="${P + 4}" fill="${color}" font-size="11">${label} ${money(value)}</text>`;
   $("#tab-pricing").innerHTML = `
     <div class="cards">
-      <div class="card"><small>Acceptable range</small><strong>${fmt(range[0])} – ${fmt(range[1])}</strong><span class="sub">${serverPricing && !serverPricing.error ? '<span class="verified">Verified by van_westendorp.py</span>' : '<span class="preview">live preview</span>'}</span></div>
-      <div class="card"><small>Optimal (OPP)</small><strong>${fmt(points.OPP)}</strong></div>
-      <div class="card"><small>Indifference (IPP)</small><strong>${fmt(points.IPP)}</strong></div>
-      <div class="card"><small>Your price</small><strong>${fmt(price)}</strong><span class="sub">${price && range[1] && price > range[1] ? "above the range" : price && range[0] && price < range[0] ? "below the range" : "inside the range"}</span></div>
+      <div class="card"><small>Acceptable range</small><strong>${money(range[0])} – ${money(range[1])}</strong><span class="sub">${serverPricing && !serverPricing.error ? '<span class="verified">Verified by van_westendorp.py</span>' : '<span class="preview">live preview</span>'}</span></div>
+      <div class="card"><small>Optimal (OPP)</small><strong>${money(points.OPP)}</strong></div>
+      <div class="card"><small>Indifference (IPP)</small><strong>${money(points.IPP)}</strong></div>
+      <div class="card"><small>Your price</small><strong>${money(price)}</strong><span class="sub">${price && range[1] && price > range[1] ? "above the range" : price && range[0] && price < range[0] ? "below the range" : "inside the range"}</span></div>
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;background:var(--panel);border-radius:10px;border:1px solid var(--line)">
       <rect x="${x(range[0] ?? min)}" y="${P - 6}" width="${Math.max(0, x(range[1] ?? min) - x(range[0] ?? min))}" height="${H - 2 * P + 12}" fill="#37d67a14"/>
@@ -809,7 +815,7 @@ function renderPricing(answers, serverPricing) {
       ${line(curve.curves.expensive, "#6ea8fe")}${line(curve.curves.tooExpensive, "#2dd4bf", "6 4")}
       ${marker("OPP", points.OPP, "#e8ecf6")}${marker("IPP", points.IPP, "#94a0bb")}
       ${price ? `<line x1="${x(Math.min(max, Math.max(min, price)))}" x2="${x(Math.min(max, Math.max(min, price)))}" y1="${P - 6}" y2="${H - P + 6}" stroke="#ffc94d" stroke-width="2"/><text x="${x(Math.min(max, Math.max(min, price))) + 4}" y="${H - P - 4}" fill="#ffc94d" font-size="11">your price</text>` : ""}
-      <text x="${P}" y="${H - 8}" fill="#94a0bb" font-size="11">${fmt(min)}</text><text x="${W - P - 40}" y="${H - 8}" fill="#94a0bb" font-size="11">${fmt(max)}</text>
+      <text x="${P}" y="${H - 8}" fill="#94a0bb" font-size="11">${money(min)}</text><text x="${W - P - 40}" y="${H - 8}" fill="#94a0bb" font-size="11">${money(max)}</text>
     </svg>
     <p class="hint"><span style="color:#ff5d73">too cheap</span> · <span style="color:#f4a259">cheap</span> · <span style="color:#6ea8fe">expensive</span> · <span style="color:#2dd4bf">too expensive</span>. Green band = acceptable range. Simulated answers; real surveys beat this.</p>`;
 }
@@ -862,14 +868,14 @@ async function runCfo() {
     const c = out.cfo;
     $("#cfoOut").innerHTML = `
       <div class="cards">
-        <div class="card"><small>Contribution / unit</small><strong>${fmt(c.contribution)}</strong><span class="sub">${pct(c.contribution_pct)} margin</span></div>
+        <div class="card"><small>Contribution / unit</small><strong>${money(c.contribution)}</strong><span class="sub">${pct(c.contribution_pct)} margin</span></div>
         <div class="card"><small>Break-even</small><strong>${fmt(c.breakeven_per_day)}/day</strong><span class="sub">capacity ${fmt(c.capacity_per_day)}</span></div>
-        <div class="card"><small>Year-1 profit</small><strong>${fmt(c.year1_profit)}</strong><span class="sub">after startup ${fmt(c.year1_after_startup)}</span></div>
-        <div class="card"><small>Payback</small><strong>${c.payback_month ? `month ${c.payback_month}` : "not in year 1"}</strong><span class="sub">cash needed ${fmt(c.cash_needed)}</span></div>
+        <div class="card"><small>Year-1 profit</small><strong>${money(c.year1_profit)}</strong><span class="sub">after startup ${money(c.year1_after_startup)}</span></div>
+        <div class="card"><small>Payback</small><strong>${c.payback_month ? `month ${c.payback_month}` : "not in year 1"}</strong><span class="sub">cash needed ${money(c.cash_needed)}</span></div>
       </div>
       ${c.flags.length ? `<h3>Red flags</h3><ul class="quotes">${c.flags.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>` : '<p class="verified">No red flags from unit_economics.py (only as good as the inputs).</p>'}
       <h3>What-ifs</h3><table><tr><th>Scenario</th><th>Year-1 profit</th><th>Payback</th></tr>
-      ${Object.entries(out.what_ifs).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${fmt(v.year1_profit)}</td><td>${v.payback_month ? `month ${v.payback_month}` : "–"}</td></tr>`).join("")}</table>`;
+      ${Object.entries(out.what_ifs).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${money(v.year1_profit)}</td><td>${v.payback_month ? `month ${v.payback_month}` : "–"}</td></tr>`).join("")}</table>`;
   } catch (error) {
     toast(error.message, true);
   }
