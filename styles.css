@@ -832,3 +832,29 @@ h3 { font-family: var(--font-display); font-size: 23px; font-weight: 400; margin
 
 /* Overlay text never swallows clicks meant for a buyer in the arena. */
 .legend { pointer-events: none; }
+
+/* Round 2: named roster chips read at a glance; the dense layout (40+ buyers) keeps colour tiles. */
+.roster:not(.dense) { display: flex; flex-wrap: wrap; gap: 4px; }
+.roster:not(.dense) .rchip { padding: 0 8px; height: 24px; font-size: 12px; font-weight: 500; }
+/* Interaction hint: one quiet line that tells people the square is touchable. */
+.orbit-hint {
+  position: absolute; top: 128px; right: 12px; z-index: 3; margin: 0; pointer-events: none;
+  font-size: 12px; color: var(--text-2); background: var(--overlay); border: 1px solid var(--line);
+  border-radius: 6px; padding: 3px 8px;
+}
+/* The one burnt-orange element is the primary action (shade darkened for AA on white text). */
+:root { --accent-strong: #b53b15; }
+.primary { background: var(--accent-strong); color: #fff; }
+.primary:hover:not(:disabled) { background: #9a3211; }
+.speed input { width: 88px; }
+@media (max-width: 760px) {
+  .orbit-hint { position: static; order: 6; margin: 6px 12px 0; align-self: flex-start; }
+  .bot-label { font-size: 13px; }
+}
+.speed input { accent-color: var(--ink); }
+
+/* Inspector sits top-left on desktop so the camera buttons and hint on the right stay usable. */
+@media (min-width: 761px) {
+  .inspector { right: auto; left: 12px; top: 92px; }
+}
+.inspector .ins-kicker { margin: 0 0 4px; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }

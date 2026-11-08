@@ -432,7 +432,7 @@ function renderRoster(personas) {
     chip.dataset.id = persona.id;
     chip.dataset.state = "wait";
     chip.style.setProperty("--seg", segmentHex(persona.segment));
-    chip.textContent = name.slice(0, 2);
+    chip.textContent = name.split(/\s+/)[0].slice(0, 8);
     chip.title = `${name} · ${persona.segment} · waiting`;
     chip.addEventListener("mouseenter", () => {
       arena.highlight(persona.id);
@@ -470,13 +470,14 @@ function updateRosterSummary() {
 
 const STATE_WORDS = { queued: "In the queue", walking: "Walking to the stall", thinking: "Reading the pitch", buy: "Buys", pass: "Passes" };
 
-function renderInspector(persona, answer) {
+function renderInspector(persona, answer, kicker = "") {
   const box = $("#botInspector");
   const segmentIndex = (state.customer.segments || []).findIndex((s) => s.name === persona.segment);
   const color = SEGMENT_HEX[Math.max(0, segmentIndex) % SEGMENT_HEX.length];
   const botState = answer ? (answer.buys ? "buy" : "pass") : (arena.bots.get(persona.id)?.state || "queued");
   box.hidden = false;
   box.innerHTML = `
+    ${kicker ? `<p class="ins-kicker">${escapeHtml(kicker)}</p>` : ""}
     <div class="ins-head">
       <span class="ins-swatch" style="background:${color}"></span>
       <h4>${escapeHtml(persona.name)}</h4>
@@ -493,7 +494,17 @@ function renderInspector(persona, answer) {
   });
 }
 
-function selectBot(id) {
+// After a run, open one concrete buyer in the inspector so the result has a face: a buyer who
+// passed but says what would change their mind (the most useful next lead), else the first answer.
+// Desktop only; on a phone the card would cover most of the square.
+function spotlightBuyer() {
+  if (window.matchMedia("(max-width: 760px)").matches) return;
+  const answers = state.current?.answers || [];
+  const pick = answers.find((a) => !a.buys && a.would_change_my_mind) || answers.find((a) => !a.buys) || answers[0];
+  if (pick) selectBot(pick.id, "One buyer, up close");
+}
+
+function selectBot(id, kicker = "") {
   if (String(id).startsWith("R")) return selectReviewer(id);
   const run = state.current;
   if (!run) return;
@@ -509,7 +520,7 @@ function selectBot(id) {
     entry.classList.toggle("selected", isSelected);
     if (isSelected) entry.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
-  renderInspector(persona, answer);
+  renderInspector(persona, answer, kicker);
   const card = $("#botCard");
   card.hidden = false;
   card.innerHTML = `<h4>${escapeHtml(persona.name)} · ${escapeHtml(persona.age)}</h4>
@@ -566,6 +577,7 @@ async function runPanel(letter = "A") {
     const seed = letter === "B" ? state.runs.A.seed : (Number($("#seed").value) || undefined);
     await executeRun({ letter, pitch, seed, variant: variantName(letter), price });
     document.documentElement.dataset.run = "done";
+    spotlightBuyer();
   } catch (error) {
     document.documentElement.dataset.run = "stopped";
     toast(friendlyError(error.message), true, 8000);

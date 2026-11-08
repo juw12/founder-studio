@@ -213,6 +213,30 @@ class Bot {
     this.decisionDisc.visible = false;
     this.rig = new THREE.Group();
     this.rig.add(body, head, visor, eyeLeft, eyeRight, antenna, this.bulb, this.ring);
+    // Small per-buyer variety (stable per id): a cap, a tote or a scarf, and a slight height
+    // difference, so a crowd reads as people rather than clones. Purely visual.
+    let hash = 0;
+    for (const ch of String(persona.id)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    body.scale.y = 0.92 + (hash % 5) * 0.04;
+    const trim = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.55), roughness: 0.7 });
+    const variant = hash % 4;
+    if (variant === 1) {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 20), trim);
+      brim.position.y = 1.66;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.16, 20), trim);
+      crown.position.y = 1.75;
+      this.rig.add(brim, crown);
+    } else if (variant === 2) {
+      const tote = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.36, 0.3), trim);
+      tote.position.set(0.4, 0.62, 0);
+      tote.castShadow = true;
+      this.rig.add(tote);
+    } else if (variant === 3) {
+      const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.07, 8, 20), trim);
+      scarf.rotation.x = Math.PI / 2;
+      scarf.position.y = 1.16;
+      this.rig.add(scarf);
+    }
     this.group.add(this.rig, shadow, this.decisionDisc);
     this.group.position.copy(spawn);
     this.target = spawn.clone();
@@ -399,9 +423,11 @@ export class Arena {
     const paintPath = (x1, z1, x2, z2, width) => {
       const [ax, ay] = toPx(x1, z1);
       const [bx, by] = toPx(x2, z2);
-      for (const [grow, alpha] of [[1.35, 0.35], [1, 1]]) {
+      // A thin worn edge in the path tone, then a pale walkway inside it: reads as a footpath,
+      // not as a dark slab across the square.
+      for (const [grow, alpha, tone] of [[1.12, 0.55, hex(THEME.path)], [1, 1, "#efe6d5"]]) {
         pc.globalAlpha = alpha;
-        pc.strokeStyle = hex(THEME.path);
+        pc.strokeStyle = tone;
         pc.lineWidth = width * grow * pxPerUnit;
         pc.beginPath();
         pc.moveTo(ax, ay);
@@ -410,6 +436,25 @@ export class Arena {
       }
       pc.globalAlpha = 1;
     };
+    pc.strokeStyle = hex(THEME.path);
+    pc.globalAlpha = 0.35;
+    pc.lineWidth = 2;
+    for (let ring = 3; ring < PLAZA_R; ring += 2.2) {
+      pc.beginPath();
+      pc.arc(512, 512, ring * pxPerUnit, 0, Math.PI * 2);
+      pc.stroke();
+    }
+    let seed = 7;
+    const rand = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    pc.fillStyle = hex(THEME.path);
+    for (let i = 0; i < 900; i++) {
+      pc.globalAlpha = 0.12 + rand() * 0.18;
+      pc.fillRect(rand() * 1024, rand() * 1024, 2 + rand() * 3, 2 + rand() * 3);
+    }
+    pc.globalAlpha = 1;
     paintPath(0, QUEUE_Z + 1.7, 0, -1.2, 2.2);
     paintPath(1.8, 1.6, 9, ZONE_Z - 1, 1.6);
     paintPath(-1.8, 1.6, -9, ZONE_Z - 1, 1.6);
@@ -550,6 +595,76 @@ export class Arena {
       bulb.position.set(x, 3.3, z);
       this.scene.add(post, bulb);
     }
+    const wood = new THREE.MeshStandardMaterial({ color: THEME.trunk, roughness: 0.8 });
+    const iron = new THREE.MeshStandardMaterial({ color: THEME.ink, roughness: 0.6, metalness: 0.3 });
+    for (const [x, z, turn] of [[-12.5, -2.5, 0.35], [12.5, -2.5, -0.35], [-5.5, 8.6, 0], [5.5, 8.6, 0]]) {
+      const bench = new THREE.Group();
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.5), wood);
+      seat.position.y = 0.5;
+      const back = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.08), wood);
+      back.position.set(0, 0.8, -0.24);
+      bench.add(seat, back);
+      for (const side of [-0.85, 0.85]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.45), iron);
+        leg.position.set(side, 0.25, 0);
+        bench.add(leg);
+      }
+      bench.traverse((mesh) => {
+        mesh.castShadow = true;
+      });
+      bench.position.set(x, 0, z);
+      bench.rotation.y = turn;
+      this.scene.add(bench);
+    }
+    const clay = new THREE.MeshStandardMaterial({ color: 0xb8714a, roughness: 0.85 });
+    const bloom = [0xd9481f, 0xb8862b, 0xc85a7a];
+    // Kept off the walking lines (queue -> stall -> zones).
+    [[-3.0, -3.4], [3.0, -3.4], [-1.3, 4.7], [1.3, 4.7]].forEach(([x, z], i) => {
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.32, 0.6, 14), clay);
+      pot.position.set(x, 0.3, z);
+      const shrub = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), i % 2 ? leaf : leafLight);
+      shrub.position.set(x, 0.85, z);
+      const flowers = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.16, 0),
+        new THREE.MeshStandardMaterial({ color: bloom[i % bloom.length], roughness: 0.7, flatShading: true })
+      );
+      flowers.position.set(x + 0.2, 1.2, z + 0.15);
+      for (const mesh of [pot, shrub, flowers]) {
+        mesh.castShadow = true;
+        this.scene.add(mesh);
+      }
+    });
+    // Bunting between the two queue lamps: small paper flags in the page palette, hung on a sagging line.
+    const flagColors = [THEME.accent, 0xb8862b, ...SEGMENT_COLORS.slice(0, 3)];
+    const flagShape = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-0.22, 0, 0),
+      new THREE.Vector3(0.22, 0, 0),
+      new THREE.Vector3(0, -0.42, 0),
+    ]);
+    flagShape.computeVertexNormals();
+    const flags = 15;
+    for (let i = 0; i <= flags; i++) {
+      const t = i / flags;
+      const x = -5.5 + 11 * t;
+      const y = 3.15 - Math.sin(Math.PI * t) * 0.55;
+      if (i > 0 && i < flags) {
+        const flag = new THREE.Mesh(
+          flagShape,
+          new THREE.MeshStandardMaterial({ color: flagColors[i % flagColors.length], side: THREE.DoubleSide, roughness: 0.9 })
+        );
+        flag.position.set(x, y, -4.5);
+        this.scene.add(flag);
+      }
+    }
+    const linePoints = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24;
+      linePoints.push(new THREE.Vector3(-5.5 + 11 * t, 3.15 - Math.sin(Math.PI * t) * 0.55, -4.5));
+    }
+    this.scene.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(linePoints),
+      new THREE.LineBasicMaterial({ color: THEME.ink, transparent: true, opacity: 0.5 })
+    ));
   }
 
   setStall(title, subtitle) {
