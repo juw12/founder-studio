@@ -24,6 +24,12 @@ const SEGMENT_COLORS = [1, 2, 3, 4, 5, 6].map((i) => tokenHex(`--seg-${i}`, "#47
 const BUY_COLOR = tokenHex("--buy", "#15803d");
 const PASS_COLOR = tokenHex("--pass", "#c0262d");
 const THINK_COLOR = tokenHex("--think", "#b45309");
+// Waiting line behind the stall (between the stall and the far edge of the frame).
+const QUEUE_Z = -6.2;
+// Depth of the BUY / PASS zone centres; kept shallow so overlays at the bottom never cover a pile.
+const ZONE_Z = 3.6;
+const ZONE_R = 4.4;
+const QUEUE_WIDTH = 15;
 
 function labelTexture(lines, { width = 512, height = 256, bg = THEME.labelBg, fg = THEME.labelFg, accent = "#" + THEME.accent.toString(16).padStart(6, "0"), big = false } = {}) {
   const canvas = document.createElement("canvas");
@@ -88,6 +94,38 @@ function zoneDisc(color, label, x, z, radius) {
   group.userData.setCount = (count) => {
     signMaterial.map?.dispose();
     signMaterial.map = labelTexture([count ? `${label} · ${count}` : label], { accent, big: true });
+    signMaterial.needsUpdate = true;
+  };
+  return group;
+}
+
+// The waiting line behind the stall: a soft floor strip with a "QUEUE" sign, so the idle
+// scene already reads left to right as queue -> stall -> BUY / PASS.
+function queueArea(width, z) {
+  const group = new THREE.Group();
+  const strip = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, 3.4),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.08, roughness: 0.9 })
+  );
+  strip.rotation.x = -Math.PI / 2;
+  strip.position.y = 0.012;
+  const edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.PlaneGeometry(width, 3.4)),
+    new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.45 })
+  );
+  edge.rotation.x = -Math.PI / 2;
+  edge.position.y = 0.02;
+  const signMaterial = new THREE.MeshBasicMaterial({
+    map: labelTexture(["QUEUE"], { accent: "#94a3b8", big: true }),
+    transparent: true,
+  });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.5), signMaterial);
+  sign.position.set(width / 2 + 1.9, 1.2, 0);
+  group.add(strip, edge, sign);
+  group.position.set(0, 0, z);
+  group.userData.setCount = (count) => {
+    signMaterial.map?.dispose();
+    signMaterial.map = labelTexture([count ? `QUEUE · ${count}` : "QUEUE"], { accent: "#94a3b8", big: true });
     signMaterial.needsUpdate = true;
   };
   return group;
@@ -160,6 +198,8 @@ class Bot {
   setThinking() {
     this.state = "thinking";
     this.ring.visible = true;
+    this.decisionMaterial.color.setHex(THINK_COLOR);
+    this.decisionDisc.visible = true;
     this.bulbMaterial.color.setHex(THINK_COLOR);
     this.eyeMaterial.color.setHex(THINK_COLOR);
   }
@@ -171,6 +211,7 @@ class Bot {
     this.bulbMaterial.color.setHex(color);
     this.eyeMaterial.color.setHex(color);
     this.decisionMaterial.color.setHex(color);
+    this.decisionMaterial.opacity = 0.7;
     this.decisionDisc.visible = true;
     this.jump = buys ? 1 : 0;
   }
@@ -193,6 +234,7 @@ class Bot {
       this.rig.rotation.z *= 0.9;
     }
     if (this.state === "thinking") {
+      this.decisionMaterial.opacity = 0.55 + Math.sin(time * 6) * 0.35;
       this.ring.rotation.z -= dt * 5;
       this.ring.rotation.y = Math.sin(time * 2) * 0.3;
       this.bulb.scale.setScalar(1 + Math.sin(time * 12) * 0.3);
@@ -282,7 +324,7 @@ export class Arena {
     this.scene.background = new THREE.Color(THEME.sceneBg);
     this.scene.fog = new THREE.Fog(THEME.sceneBg, 28, 60);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
-    this.orbit = { azimuth: 0.0, elevation: 0.62, radius: 24, target: new THREE.Vector3(0, 1.4, 1.5) };
+    this.orbit = { azimuth: 0.0, elevation: 0.86, radius: 24, target: new THREE.Vector3(0, 1.4, 1.5) };
     this.updateCamera();
 
     this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 0.9));
@@ -304,9 +346,12 @@ export class Arena {
     this.scene.add(grid);
 
     this.buildStall();
-    this.buyZone = zoneDisc(BUY_COLOR, "BUY", 9, 5, 4.4);
-    this.passZone = zoneDisc(PASS_COLOR, "PASS", -9, 5, 4.4);
+    this.buyZone = zoneDisc(BUY_COLOR, "BUY", 9, ZONE_Z, ZONE_R);
+    this.passZone = zoneDisc(PASS_COLOR, "PASS", -9, ZONE_Z, ZONE_R);
     this.scene.add(this.buyZone, this.passZone);
+    this.queueZone = queueArea(QUEUE_WIDTH, QUEUE_Z);
+    this.scene.add(this.queueZone);
+    this.previewBots = [];
     this.selectedId = null;
     this.lastDecidedId = null;
 
@@ -421,10 +466,11 @@ export class Arena {
     this.renderer.setSize(clientWidth, clientHeight, false);
     this.camera.aspect = clientWidth / clientHeight;
     // Keep both decision zones (x = +/-12.6) in frame on narrow screens.
-    this.orbit.radius = Math.min(40, Math.max(24, 24 * (1.45 / this.camera.aspect)));
-    // On phone-width canvases look further forward so the zones fill the frame
-    // instead of leaving empty floor above them.
-    this.orbit.target.z = clientWidth < 600 ? 6 : 1.5;
+    this.orbit.radius = Math.min(42, Math.max(27, 27 * (1.45 / this.camera.aspect)));
+    // The HUD covers the top of the canvas, so aim a little behind the stall: the queue
+    // clears the HUD and both zones stay in frame. Phones have the HUD above the canvas.
+    this.orbit.target.z = clientWidth < 600 ? 1.5 : -1.2;
+    this.orbit.target.y = clientWidth < 600 ? 1.4 : 3.2;
     this.updateCamera();
     this.camera.updateProjectionMatrix();
   }
@@ -445,10 +491,9 @@ export class Arena {
   }
 
   spawn(persona, segmentIndex, index, total) {
+    if (this.previewBots.length) this.clearPreview();
     this.panelSize = total;
-    const spread = Math.min(22, 1.2 * total);
-    const x = -spread / 2 + (spread * (index + 0.5)) / Math.max(1, total);
-    const spawn = new THREE.Vector3(x, 0, -14 - (index % 3) * 1.2);
+    const spawn = this.queueSlot(index, total);
     const bot = new Bot(persona, SEGMENT_COLORS[segmentIndex % SEGMENT_COLORS.length], spawn);
     bot.speed = 3.2 * this.speedFactor;
     this.scene.add(bot.group);
@@ -465,6 +510,49 @@ export class Arena {
     this.labelLayer.appendChild(label);
     this.labels.set(persona.id, label);
     return bot;
+  }
+
+  // Two staggered rows inside the queue strip.
+  queueSlot(index, total) {
+    const perRow = Math.max(1, Math.ceil(total / 2));
+    const row = index % 2;
+    const col = Math.floor(index / 2);
+    const gap = Math.min(1.3, (QUEUE_WIDTH - 1.2) / Math.max(1, perRow - 1));
+    const x = (col - (perRow - 1) / 2) * gap + (row ? gap / 2 : 0);
+    return new THREE.Vector3(x, 0, QUEUE_Z - 0.75 + row * 1.5);
+  }
+
+  // Idle preview: anonymous buyers waiting in the queue, coloured by segment share.
+  preview(total, shares) {
+    this.clearPreview();
+    if (this.bots.size || !total) return;
+    const weights = shares.length ? shares : [1];
+    const sum = weights.reduce((a, b) => a + (b || 0), 0) || 1;
+    let segment = 0;
+    let used = 0;
+    for (let i = 0; i < total; i++) {
+      while (segment < weights.length - 1 && i >= Math.round(((used + (weights[segment] || 0)) / sum) * total)) {
+        used += weights[segment] || 0;
+        segment++;
+      }
+      const bot = new Bot({ id: `preview-${i}` }, SEGMENT_COLORS[segment % SEGMENT_COLORS.length], this.queueSlot(i, total));
+      bot.group.rotation.y = 0;
+      this.scene.add(bot.group);
+      this.previewBots.push(bot);
+    }
+    this.queueZone.userData.setCount(total);
+  }
+
+  clearPreview() {
+    for (const bot of this.previewBots) this.scene.remove(bot.group);
+    this.previewBots = [];
+  }
+
+  // Number of buyers still waiting in the queue (shown on the queue sign).
+  updateQueueCount() {
+    let waiting = 0;
+    for (const bot of this.bots.values()) if (bot.state === "queued") waiting++;
+    this.queueZone.userData.setCount(waiting);
   }
 
   setSpeed(factor) {
@@ -487,6 +575,7 @@ export class Arena {
     const radius = 3.3 + (slot % 2) * 0.9;
     bot.walkTo(new THREE.Vector3(Math.cos(angle) * radius * (slot % 2 ? -1 : 1), 0, -Math.sin(angle) * radius * 0.4 + 2.6));
     bot.state = "walking";
+    this.updateQueueCount();
     return this.travelMs(bot);
   }
 
@@ -505,10 +594,10 @@ export class Arena {
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
     const cx = buys ? 9 : -9;
     const columns = this.panelSize > 30 ? 8 : 5;
-    const gap = columns === 8 ? 0.95 : 1.7;
+    const gap = columns === 8 ? 0.95 : 1.85;
     const col = index % columns;
     const row = Math.floor(index / columns);
-    bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, 5 - 2.5 + row * gap));
+    bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, ZONE_Z - 2.5 + row * gap));
     const label = this.labels.get(id);
     if (label) {
       label.dataset.state = buys ? "buy" : "pass";
@@ -603,6 +692,7 @@ export class Arena {
     const time = this.clock.elapsedTime;
     let anyMoving = false;
     for (const bot of [...this.bots.values(), ...this.reviewers.values()]) anyMoving = bot.update(dt, time) || anyMoving;
+    for (const bot of this.previewBots) bot.update(dt, time);
     if (!anyMoving && !this.dragging) {
       this.orbit.azimuth += dt * 0.03;
       this.updateCamera();
@@ -620,13 +710,15 @@ export class Arena {
       // Queued bots stay unlabelled. Settled bots in a pile drop their tag (the zone sign
       // carries the count); only the latest decision and the selected bot keep a name.
       const settled = bot.state === "buy" || bot.state === "pass";
+      // Settled bots drop their tag (the roster and the zone sign carry identity and count);
+      // only the latest decision and the selected bot keep a name.
       const compact = false;
       label.classList.toggle("compact", compact);
       if (!selected && (!(bot.state in rank) || (settled && id !== this.lastDecidedId))) {
         label.style.display = "none";
         continue;
       }
-      projected.set(bot.group.position.x, 2.75, bot.group.position.z).project(this.camera);
+      projected.set(bot.group.position.x, compact ? 2.3 : 2.75, bot.group.position.z).project(this.camera);
       if (projected.z >= 1) {
         label.style.display = "none";
         continue;
@@ -635,8 +727,8 @@ export class Arena {
         label,
         bot,
         compact,
-        w: 64,
-        h: 26,
+        w: compact ? 24 : 64,
+        h: compact ? 18 : 26,
         priority: selected ? 0 : rank[bot.state],
         x: offsetLeft + ((projected.x + 1) / 2) * width,
         y: offsetTop + ((1 - projected.y) / 2) * height,
@@ -674,8 +766,8 @@ export class Arena {
     };
     const reserved = [
       signBox(-2.5, 4.45, 2.5, 1.95, -0.3),
-      signBox(9 - 1.9, 3.6, 9 + 1.9, 1.6, 0.4),
-      signBox(-9 - 1.9, 3.6, -9 + 1.9, 1.6, 0.4),
+      signBox(9 - 1.9, 3.6, 9 + 1.9, 1.6, ZONE_Z - ZONE_R - 0.2),
+      signBox(-9 - 1.9, 3.6, -9 + 1.9, 1.6, ZONE_Z - ZONE_R - 0.2),
     ];
     const onSign = (x, y, w = 80, h = 22) => reserved.some((box) =>
       x + w / 2 > box.left && x - w / 2 < box.right && y > box.top && y - h < box.bottom);
@@ -694,6 +786,7 @@ export class Arena {
       item.label.style.display = clash ? "none" : "block";
       if (clash) continue;
       placed.push(item);
+      item.x = Math.min(offsetLeft + width - item.w / 2 - 4, Math.max(offsetLeft + item.w / 2 + 4, item.x));
       item.label.style.transform = `translate(-50%, -100%) translate(${item.x}px, ${item.y}px)`;
     }
   }

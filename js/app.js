@@ -225,6 +225,10 @@ function renderObjections() {
 }
 
 function renderLegend() {
+  if (!state.current && !state.running) {
+    arena.preview(Number($("#panelSize").value) || 0, (state.customer.segments || []).map((s) => Number(s.share) || 0));
+    renderRoster(null);
+  }
   $("#legend").innerHTML = (state.customer.segments || [])
     .map((s, i) => `<span><span class="dot" style="background:${SEGMENT_HEX[i % SEGMENT_HEX.length]}"></span>${escapeHtml(s.name)}</span>`)
     .join("");
@@ -307,6 +311,7 @@ function resetLive() {
   $("#feedList").innerHTML = "";
   $("#feedCount").textContent = "0";
   $("#botCard").hidden = true;
+  renderRoster(null);
   updateHud([], 0, "ready");
 }
 
@@ -365,6 +370,7 @@ function feedItem(persona, answer, status) {
     for (const row of $$("#feedList li.latest")) row.classList.remove("latest");
     item.classList.add("latest");
   }
+  setRosterState(persona, status === "thinking" ? "think" : answer?.buys ? "buy" : "pass", answer?.reason || "");
   const tag = status === "thinking" ? '<span class="tag think">thinking</span>'
     : answer?.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>';
   if (status !== "thinking" && answer) {
@@ -376,6 +382,76 @@ function feedItem(persona, answer, status) {
   $("#feedCount").textContent = $$("#feedList li").length;
 }
 
+// ---------------- roster: one chip per buyer, always showing their state ----------------
+const ROSTER_STATES = ["wait", "think", "buy", "pass"];
+
+function renderRoster(personas) {
+  const roster = $("#roster");
+  if (!personas?.length) {
+    const planned = Number($("#panelSize").value) || 0;
+    const segments = state.customer?.segments || [];
+    const shares = segments.map((s) => Number(s.share) || 0);
+    const sum = shares.reduce((a, b) => a + b, 0) || 1;
+    let html = "";
+    let segment = 0;
+    let used = 0;
+    for (let i = 0; i < Math.min(planned, 100); i++) {
+      while (segment < shares.length - 1 && i >= Math.round(((used + shares[segment]) / sum) * planned)) {
+        used += shares[segment];
+        segment++;
+      }
+      html += `<span class="rchip" data-state="wait" style="--seg:${SEGMENT_HEX[segment % SEGMENT_HEX.length]}"></span>`;
+    }
+    roster.innerHTML = html;
+    roster.classList.toggle("dense", planned > 40);
+    $("#rosterSummary").textContent = `${planned} waiting in the queue`;
+    return;
+  }
+  roster.classList.toggle("dense", personas.length > 40);
+  roster.innerHTML = "";
+  for (const persona of personas) {
+    const chip = document.createElement("span");
+    const name = persona.name || persona.id;
+    chip.className = "rchip";
+    chip.dataset.id = persona.id;
+    chip.dataset.state = "wait";
+    chip.style.setProperty("--seg", segmentHex(persona.segment));
+    chip.textContent = name.slice(0, 2);
+    chip.title = `${name} · ${persona.segment} · waiting`;
+    chip.addEventListener("mouseenter", () => {
+      arena.highlight(persona.id);
+      $(`#feedList li[data-id="${persona.id}"]`)?.classList.add("hover");
+    });
+    chip.addEventListener("mouseleave", () => {
+      arena.highlight(state.selected);
+      $(`#feedList li[data-id="${persona.id}"]`)?.classList.remove("hover");
+    });
+    chip.addEventListener("click", () => selectBot(persona.id));
+    roster.appendChild(chip);
+  }
+  updateRosterSummary();
+}
+
+function setRosterState(persona, rosterState, reason = "") {
+  const chip = $(`#roster .rchip[data-id="${persona.id}"]`);
+  if (!chip || !ROSTER_STATES.includes(rosterState)) return;
+  chip.dataset.state = rosterState;
+  const label = { wait: "waiting", think: "thinking", buy: "BUY", pass: "PASS" }[rosterState];
+  chip.title = `${persona.name || persona.id} · ${persona.segment} · ${label}${reason ? `: ${reason}` : ""}`;
+  updateRosterSummary();
+}
+
+function updateRosterSummary() {
+  const chips = $$("#roster .rchip");
+  const count = (s) => chips.filter((c) => c.dataset.state === s).length;
+  const parts = [];
+  if (count("buy")) parts.push(`${count("buy")} buy`);
+  if (count("pass")) parts.push(`${count("pass")} pass`);
+  if (count("think")) parts.push(`${count("think")} thinking`);
+  if (count("wait")) parts.push(`${count("wait")} waiting`);
+  $("#rosterSummary").textContent = parts.join(" · ");
+}
+
 function selectBot(id) {
   if (String(id).startsWith("R")) return selectReviewer(id);
   const run = state.current;
@@ -385,7 +461,8 @@ function selectBot(id) {
   const answer = run.answers.find((a) => a.id === id);
   state.selected = id;
   arena.highlight(id);
-  // Link the 3D bot and its feed entry both ways.
+  // Link the 3D bot, its roster chip and its feed entry.
+  for (const chip of $$("#roster .rchip")) chip.classList.toggle("selected", chip.dataset.id === id);
   for (const entry of $$("#feedList li")) {
     const isSelected = entry.dataset.id === id;
     entry.classList.toggle("selected", isSelected);
@@ -506,6 +583,7 @@ async function animateRun(run, price) {
   arena.setStall(state.customer.business, priceLabel());
   const segmentIndex = Object.fromEntries((state.customer.segments || []).map((s, i) => [s.name, i]));
   run.personas.forEach((persona, i) => arena.spawn(persona, segmentIndex[persona.segment] ?? 0, i, run.personas.length));
+  renderRoster(run.personas);
   arena.setSpeed(speed());
   updateHud([], run.personas.length, state.mode === "ai" ? "AI buyers reading the pitch" : "buyers arriving");
   const incomes = run.personas.map((p) => p.income);
@@ -550,7 +628,7 @@ async function animateRun(run, price) {
       if (!answer.error) run.answers.push(answer);
       arena.decide(persona.id, answer.buys, answer.reason);
       feedItem(persona, answer, "done");
-      updateHud(run.answers, run.personas.length, "deciding");
+      updateHud(run.answers, run.personas.length, "decided so far");
       if (++livePricingTick % 3 === 0) renderPricing(run.answers, null);
       if (state.selected === persona.id) selectBot(persona.id);
       await pause(250 / speed());
@@ -585,6 +663,7 @@ async function replay() {
   arena.setStall(data.customer?.business || state.project, priceLabel());
   const segmentIndex = Object.fromEntries((data.customer?.segments || []).map((s, i) => [s.name, i]));
   run.personas.forEach((p, i) => arena.spawn(p, segmentIndex[p.segment] ?? 0, i, run.personas.length));
+  renderRoster(run.personas);
   arena.setSpeed(speed());
   const queue = run.personas.filter((p) => byId[p.id]);
   const worker = async (w) => {

@@ -31,7 +31,7 @@
       <button data-mode="replay" class="seg" title="Replay a panel already saved in this project.">Replay</button>
     </div>
     <div class="run">
-      <label class="speed" title="How fast buyers walk in the arena. Does not change results.">Walk speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
+      <label class="speed" title="How fast buyers walk in the arena. Does not change results.">Animation speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
       <button id="skipBtn" class="ghost" hidden title="Finish this run instantly and show the results">Skip<span class="long"> to results</span></button>
       <button id="runBtn" class="primary">Run panel</button>
     </div>
@@ -118,7 +118,7 @@
         </div>
         <div id="ticker" class="ticker" aria-live="polite" hidden></div>
         <div id="arenaHint" class="arena-hint" role="note">
-          <span>Press <b>Run panel</b>: buyers walk up, read your pitch, then walk to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
+          <span>Press <b>Run panel</b>: each buyer leaves the queue, reads your pitch at the stall, then walks to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
           <button class="hint-close" id="hintClose" aria-label="Hide this tip">Hide</button>
         </div>
         <div id="legend" class="legend"></div>
@@ -193,6 +193,9 @@
     </section>
 
     <aside class="feed" aria-label="Live feed">
+      <div class="roster-head"><h2>Buyers</h2><span id="rosterSummary" class="roster-sum">waiting in the queue</span></div>
+      <div id="roster" class="roster" aria-label="Every buyer and their state"></div>
+      <div class="roster-key" aria-hidden="true"><span class="k wait"></span>waiting <span class="k think"></span>thinking <span class="k buy"></span>buy <span class="k pass"></span>pass</div>
       <div class="feed-head"><h2>Live decisions</h2><span id="feedCount" class="pill">0</span></div>
       <ol id="feedList" class="feed-list"></ol>
       <p class="empty feed-empty">Each buyer's decision and reason appears here as they choose. Hover one to find that buyer in the arena.</p>
