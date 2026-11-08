@@ -526,3 +526,110 @@ mark.slot { background: var(--think-bg); color: var(--think-fg); border-radius: 
   .loop-table th:nth-child(3), .loop-table td:nth-child(3) { display: none; }
   .loop-table td, .loop-table th { padding: 6px 5px; }
 }
+
+/* ======================================================================
+   s5: calm professional pass. One stats strip instead of three cards and
+   two floating badges, a quieter legend, flat feed rows, tidy setup
+   headers and an inline speed control. Later rules win on purpose.
+   ====================================================================== */
+
+/* Stats strip across the top of the arena */
+.arena .hud {
+  top: 12px; left: 12px; right: 12px; z-index: 3;
+  display: grid; grid-template-columns: auto auto minmax(140px, 1fr) auto;
+  gap: 0; padding: 0; pointer-events: none;
+  background: var(--overlay); border: 1px solid var(--line); border-radius: 10px;
+}
+.hud-cell { display: flex; align-items: center; gap: 10px; padding: 8px 14px; min-width: 0; }
+.hud-cell + .hud-cell { border-left: 1px solid var(--line); }
+.hud-cell small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.hud-cell strong { font-size: 17px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.hud-cell.progress strong { display: block; }
+.arena .hud .ring { width: 32px; height: 32px; flex: 0 0 auto; }
+.hud-cell.counts { flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; }
+.hud-cell.counts > div {
+  display: grid; grid-template-columns: 8px auto 1fr; align-items: center; column-gap: 8px;
+  font-size: 13px; color: var(--text-2);
+}
+.hud-cell.counts .dot { width: 8px; height: 8px; margin: 0; }
+.hud-cell.counts strong { font-size: 14px; text-align: right; min-width: 2ch; }
+.hud-cell.rate { flex-direction: column; align-items: stretch; justify-content: center; gap: 5px; }
+.rate-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hud-cell .bar { margin-top: 0; height: 6px; }
+.hud-cell .bar .mark { top: -3px; height: 12px; }
+.hud-cell .bar-label { margin: 0; }
+.hud-note {
+  flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px;
+  font-size: 12px; line-height: 1.35; color: var(--muted); text-align: right; max-width: 190px;
+}
+.hud-note .warn { color: var(--think-fg); }
+.hud-src { display: none; }
+
+/* Legend: one quiet strip, no pill per segment */
+.arena .legend {
+  gap: 4px 14px; padding: 5px 10px;
+  background: var(--overlay); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--text-2);
+}
+.arena .legend > span { background: none; border: 0; padding: 0; display: inline-flex; align-items: center; }
+.arena .legend .dot { width: 8px; height: 8px; }
+
+/* Header: speed control on one line */
+.speed { flex-direction: row; margin: 0; white-space: nowrap; }
+.speed input { width: 110px; padding: 0; border: 0; background: none; accent-color: var(--accent); }
+
+/* Setup steps: summary note sits under the title instead of squeezing it */
+.setup > details > summary {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: center;
+}
+.setup > details > summary .sum-note { grid-column: 2; margin-left: 0; line-height: 1.35; }
+.setup > details > summary .sum-note:empty { display: none; }
+
+/* Live decisions: flat rows with dividers, decision as a coloured word */
+.feed-list { gap: 0; }
+.feed-list li {
+  background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  padding: 10px 6px 10px 10px;
+}
+.feed-list li:hover, .feed-list li.selected { background: var(--panel-2); border-color: var(--line); }
+.feed-list li.latest { border-color: var(--line); box-shadow: inset 2px 0 0 var(--accent); }
+.feed-list .who b { color: var(--text); font-weight: 600; }
+.feed-list .who > span:first-child { color: var(--muted); }
+.feed-list .tag { background: none; padding: 0; letter-spacing: 0.04em; }
+.feed-list .why { color: var(--text-2); }
+
+/* Tip close button is a word, not a glyph */
+.hint-close { width: auto; min-width: 0; padding: 0 10px; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .arena .hud {
+    position: static; order: 1; margin: 12px 12px 0;
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .arena .hud-cell { padding: 8px 10px; }
+  .arena .hud .hud-note {
+    grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line);
+    flex-direction: row; justify-content: space-between; align-items: center;
+    max-width: none; text-align: left; padding: 6px 10px;
+  }
+  .arena .legend { position: static; order: 5; margin: 8px 12px 12px; width: fit-content; max-width: calc(100% - 24px); }
+  .hint-close { width: auto; height: 44px; min-width: 44px; padding: 0 12px; }
+}
+
+/* s5 round 2: no duplicate source line, rate label on one line, one-line honesty note, empty feed text at the top */
+.hud-cell .hud-src { display: none; }
+.arena .hud { grid-template-columns: auto auto minmax(170px, 1fr) auto; }
+.rate-head small { white-space: nowrap; }
+.rate-head strong { flex: 0 0 auto; }
+.hud-note { max-width: none; white-space: nowrap; }
+.feed-list:empty { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .arena .hud { grid-template-columns: auto auto minmax(0, 1fr); }
+  .rate-head small { white-space: normal; }
+  .arena .hud .hud-note { white-space: normal; }
+}
+
+@media (max-width: 760px) {
+  /* keep the legend clear of the round help button */
+  .arena .legend { max-width: calc(100% - 84px); }
+}

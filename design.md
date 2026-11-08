@@ -46,12 +46,18 @@ The 3D arena (`js/arena.js`) reads every colour from these tokens; there are no 
   bordered blue (FIX), green (OK) or grey (YOUR CALL). Amber still means thinking.
 - First-run setup shows only Business, Target buyer, Price and Pitch. Market anchor, notes, buyer
   details and the AI model settings sit behind disclosure (the AI section appears only in AI mode).
+- Stats strip: one bordered row of cells above the arena (progress, buy/pass counts, conversion,
+  then a note cell with the mode and "Simulated buyers, not customers"). No separate badges.
+- Live feed: flat rows split by 1 px dividers, no cards. Decision tags are text only (BUY in green,
+  PASS in muted grey), no filled pills. Arena zones are faint (disc 0.11, rings 0.5 opacity).
+- Prices show two decimals and no invented currency ("6.50 / cup").
 - Phone (<= 760 px): brand + Run on one row, then project and mode rows; arena, live feed, results,
   then setup.
 
 ## Banned defaults
 
 - No purple or violet anywhere, no gradients, no glow, no backdrop blur.
-- No emoji or Unicode symbols as icons (no arrows, ticks, crosses, gears); use words or CSS shapes.
+- No emoji or Unicode symbols as icons or separators (no arrows, ticks, crosses, times signs, gears),
+  in markup or in JS strings; use words ("chose", "says", "Hide") or CSS shapes.
 - No Inter-only font stack.
 - Checked by `slop_check.py` (hone/design): 0 blockers required before shipping.

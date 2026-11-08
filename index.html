@@ -97,29 +97,28 @@
     <section class="stage">
       <div id="arena" class="arena">
         <div class="hud">
-          <div class="hud-card progress">
-            <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15.9" class="track"/><circle id="progressArc" cx="18" cy="18" r="15.9" class="arc"/></svg>
-            <div><strong id="progressText">0/0</strong><small id="stateText">ready</small><small id="hudSource" class="hud-src">source: Quick sim</small></div>
+          <div class="hud-cell progress">
+            <svg viewBox="0 0 36 36" class="ring" aria-hidden="true"><circle cx="18" cy="18" r="15.9" class="track"/><circle id="progressArc" cx="18" cy="18" r="15.9" class="arc"/></svg>
+            <div><strong id="progressText">0/0</strong><small id="stateText">ready</small><small id="hudSource" class="hud-src"></small></div>
           </div>
-          <div class="hud-card counts">
-            <div><span class="dot buy"></span><strong id="buyCount">0</strong> buy</div>
-            <div><span class="dot pass"></span><strong id="passCount">0</strong> pass</div>
+          <div class="hud-cell counts">
+            <div><span class="dot buy"></span><span class="k">Buy</span><strong id="buyCount">0</strong></div>
+            <div><span class="dot pass"></span><span class="k">Pass</span><strong id="passCount">0</strong></div>
           </div>
-          <div class="hud-card rate">
-            <small>simulated buy rate</small>
-            <strong id="rateText">–</strong>
+          <div class="hud-cell rate">
+            <div class="rate-head"><small>Simulated buy rate</small><strong id="rateText">&ndash;</strong></div>
             <div class="bar"><div id="rateFill" class="fill"></div><div id="barMark" class="mark" title="verdict bar"></div></div>
             <small id="barLabel" class="bar-label">target 25%</small>
           </div>
-        </div>
-        <div class="badges">
-          <span id="modeBadge" class="badge">Quick sim · rules, not AI</span>
-          <span class="badge warn" title="Simulated buyers give an upper bound. Real customers usually buy less.">Simulated buyers, not customers</span>
+          <div class="hud-cell hud-note">
+            <span id="modeBadge">Quick sim · rules, not AI</span>
+            <span class="warn" title="Simulated buyers give an upper bound. Real customers usually buy less.">Simulated buyers, not customers</span>
+          </div>
         </div>
         <div id="ticker" class="ticker" aria-live="polite" hidden></div>
         <div id="arenaHint" class="arena-hint" role="note">
           <span>Press <b>Run panel</b>: buyers walk up, read your pitch, then walk to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
-          <button class="hint-close" id="hintClose" aria-label="Hide this tip">&times;</button>
+          <button class="hint-close" id="hintClose" aria-label="Hide this tip">Hide</button>
         </div>
         <div id="legend" class="legend"></div>
         <button id="hintOpen" class="hint-open" type="button" aria-label="How the arena works" title="How the arena works">?</button>

@@ -66,13 +66,13 @@ function zoneDisc(color, label, x, z, radius) {
   const group = new THREE.Group();
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(radius, 64),
-    new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.16, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.11, roughness: 0.9 })
   );
   disc.rotation.x = -Math.PI / 2;
   disc.position.y = 0.01;
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(radius - 0.08, radius, 96),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 })
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 })
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.02;
@@ -327,7 +327,7 @@ export class Arena {
     base.position.y = 0.12;
     const glow = new THREE.Mesh(
       new THREE.RingGeometry(2.45, 2.6, 96),
-      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.8 })
+      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.5 })
     );
     glow.rotation.x = -Math.PI / 2;
     glow.position.y = 0.26;

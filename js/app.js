@@ -167,7 +167,11 @@ function persistLocal() {
 function priceLabel() {
   const price = $("#price").value;
   const unit = state.numbers?.unit ? ` / ${state.numbers.unit}` : "";
-  return price ? `${Number(price).toLocaleString()}${unit}` : "set a price";
+  const amount = Number(price);
+  const text = Number.isInteger(amount)
+    ? amount.toLocaleString()
+    : amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return price ? `${text}${unit}` : "set a price";
 }
 
 // ---------------- setup editor ----------------
@@ -365,7 +369,7 @@ function feedItem(persona, answer, status) {
     : answer?.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>';
   if (status !== "thinking" && answer) {
     const verb = answer.buys ? '<b class="buy-text">BUY</b>' : '<b class="pass-text">PASS</b>';
-    setTicker(`<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> &rarr; ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`);
+    setTicker(`<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> chose ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`);
   }
   item.innerHTML = `<div class="who"><span><span class="dot" style="background:${segmentHex(persona.segment)}"></span><b>${escapeHtml(persona.name || persona.id)}</b> · ${escapeHtml(persona.segment)}</span>${tag}</div>
     <div class="why">${status === "thinking" ? escapeHtml(`"${persona.objection}"…`) : escapeHtml(answer?.reason || answer?.error || "")}</div>`;
@@ -1139,7 +1143,7 @@ async function runReviewLoop() {
         else delete loop.yourCalls[reviewer.id];
         loop.activeReviewer = null;
         reviewerFeedItem(reviewer, note, "done");
-        setTicker(`<span class="dot review-dot"></span><span><b>${escapeHtml(reviewer.name)}</b> &rarr; <b>${VERDICT_TAG[note.verdict]}</b>: ${escapeHtml(note.note)}</span>`);
+        setTicker(`<span class="dot review-dot"></span><span><b>${escapeHtml(reviewer.name)}</b> says <b>${VERDICT_TAG[note.verdict]}</b>: ${escapeHtml(note.note)}</span>`);
         if (state.selected === reviewer.id) selectReviewer(reviewer.id);
         renderReview();
         await pause(arena.reviewerVerdict(reviewer.id, note.verdict) * 0.6);
