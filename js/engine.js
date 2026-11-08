@@ -81,7 +81,7 @@ export function heuristicAnswer(persona, ctx) {
   const reason = buys
     ? `${persona.behaviour_how || persona.behaviour} The pitch settles my main doubt and the price fits.`
     : priceFit < 0.5
-      ? `At ${ctx.price} it's more than I'd pay for this.`
+      ? `At ${Number(ctx.price).toFixed(2)} it's more than I'd pay for this.`
       : `"${persona.objection}" - the pitch doesn't settle that for me.`;
   return {
     id: persona.id,

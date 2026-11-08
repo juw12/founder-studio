@@ -29,7 +29,7 @@ PYODIDE_FILES = (
     "package.json",
 )
 STATIC = ("index.html", "styles.css", "LICENSE")
-STATIC_DIRS = ("js", "vendor", "licenses")
+STATIC_DIRS = ("js", "vendor", "licenses", "fonts")
 PYTHON_FILES = ["server.py", *sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "tools").glob("*.py"))]
 DEMO_PROJECT = ROOT / "projects" / "demo-matcha"
 

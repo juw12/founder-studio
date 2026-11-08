@@ -11,6 +11,7 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const params = new URLSearchParams(location.search);
 // Segment colours come from the CSS design tokens so the legend, feed dots and 3D bots always match.
+const tone = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const SEGMENT_HEX = [1, 2, 3, 4, 5, 6].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--seg-${i}`).trim() || "#475569");
 const REASONS = ["price", "habit", "need", "trust", "quality", "convenience", "timing", "values", "other"];
 
@@ -81,6 +82,14 @@ function toast(message, isError = false, ms = 4200) {
 
 // ---------------- 3D arena ----------------
 const arena = new Arena($("#arena"), { onSelect: (id) => selectBot(id) });
+// Read-only handle for automated checks (style gates); the app never relies on it.
+window.__fsArena = arena;
+for (const button of document.querySelectorAll("[data-view]")) {
+  button.addEventListener("click", () => {
+    arena.setView(button.dataset.view);
+    for (const other of document.querySelectorAll("[data-view]")) other.classList.toggle("active", other === button);
+  });
+}
 
 // ---------------- projects ----------------
 function blankCustomer(name) {
@@ -317,6 +326,7 @@ function resetLive() {
   $("#feedList").innerHTML = "";
   $("#feedCount").textContent = "0";
   $("#botCard").hidden = true;
+  $("#botInspector").hidden = true;
   renderRoster(null);
   updateHud([], 0, "ready");
 }
@@ -458,6 +468,31 @@ function updateRosterSummary() {
   $("#rosterSummary").textContent = parts.join(" · ");
 }
 
+const STATE_WORDS = { queued: "In the queue", walking: "Walking to the stall", thinking: "Reading the pitch", buy: "Buys", pass: "Passes" };
+
+function renderInspector(persona, answer) {
+  const box = $("#botInspector");
+  const segmentIndex = (state.customer.segments || []).findIndex((s) => s.name === persona.segment);
+  const color = SEGMENT_HEX[Math.max(0, segmentIndex) % SEGMENT_HEX.length];
+  const botState = answer ? (answer.buys ? "buy" : "pass") : (arena.bots.get(persona.id)?.state || "queued");
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="ins-head">
+      <span class="ins-swatch" style="background:${color}"></span>
+      <h4>${escapeHtml(persona.name)}</h4>
+      <button type="button" class="ins-close" aria-label="Close buyer details">Close</button>
+    </div>
+    <p class="ins-sub">${escapeHtml(persona.segment)} · ${escapeHtml(persona.behaviour)} · ${money(persona.income)}</p>
+    <span class="ins-state ${botState}">${STATE_WORDS[botState] || botState}</span>
+    <p class="ins-why">${answer ? escapeHtml(answer.reason) : `First doubt: ${escapeHtml(persona.objection)}`}</p>
+    ${answer && !answer.buys && answer.would_change_my_mind ? `<p class="ins-flip">Would flip if: ${escapeHtml(answer.would_change_my_mind)}</p>` : ""}`;
+  box.querySelector(".ins-close").addEventListener("click", () => {
+    box.hidden = true;
+    state.selected = null;
+    arena.highlight(null);
+  });
+}
+
 function selectBot(id) {
   if (String(id).startsWith("R")) return selectReviewer(id);
   const run = state.current;
@@ -474,6 +509,7 @@ function selectBot(id) {
     entry.classList.toggle("selected", isSelected);
     if (isSelected) entry.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
+  renderInspector(persona, answer);
   const card = $("#botCard");
   card.hidden = false;
   card.innerHTML = `<h4>${escapeHtml(persona.name)} · ${escapeHtml(persona.age)}</h4>
@@ -810,14 +846,14 @@ function renderPricing(answers, serverPricing) {
       <div class="card"><small>Your price</small><strong>${money(price)}</strong><span class="sub">${price && range[1] && price > range[1] ? "above the range" : price && range[0] && price < range[0] ? "below the range" : "inside the range"}</span></div>
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;background:var(--panel);border-radius:10px;border:1px solid var(--line)">
-      <rect x="${x(range[0] ?? min)}" y="${P - 6}" width="${Math.max(0, x(range[1] ?? min) - x(range[0] ?? min))}" height="${H - 2 * P + 12}" fill="#37d67a14"/>
-      ${line(curve.curves.tooCheap, "#ff5d73", "6 4")}${line(curve.curves.cheap, "#f4a259")}
-      ${line(curve.curves.expensive, "#6ea8fe")}${line(curve.curves.tooExpensive, "#2dd4bf", "6 4")}
-      ${marker("OPP", points.OPP, "#e8ecf6")}${marker("IPP", points.IPP, "#94a0bb")}
-      ${price ? `<line x1="${x(Math.min(max, Math.max(min, price)))}" x2="${x(Math.min(max, Math.max(min, price)))}" y1="${P - 6}" y2="${H - P + 6}" stroke="#ffc94d" stroke-width="2"/><text x="${x(Math.min(max, Math.max(min, price))) + 4}" y="${H - P - 4}" fill="#ffc94d" font-size="11">your price</text>` : ""}
-      <text x="${P}" y="${H - 8}" fill="#94a0bb" font-size="11">${money(min)}</text><text x="${W - P - 40}" y="${H - 8}" fill="#94a0bb" font-size="11">${money(max)}</text>
+      <rect x="${x(range[0] ?? min)}" y="${P - 6}" width="${Math.max(0, x(range[1] ?? min) - x(range[0] ?? min))}" height="${H - 2 * P + 12}" fill="${tone("--buy-soft")}" fill-opacity="0.7"/>
+      ${line(curve.curves.tooCheap, tone("--pass"), "6 4")}${line(curve.curves.cheap, tone("--think"))}
+      ${line(curve.curves.expensive, tone("--seg-1"))}${line(curve.curves.tooExpensive, tone("--seg-3"), "6 4")}
+      ${marker("OPP", points.OPP, tone("--text"))}${marker("IPP", points.IPP, tone("--muted"))}
+      ${price ? `<line x1="${x(Math.min(max, Math.max(min, price)))}" x2="${x(Math.min(max, Math.max(min, price)))}" y1="${P - 6}" y2="${H - P + 6}" stroke="${tone("--accent")}" stroke-width="2"/><text x="${x(Math.min(max, Math.max(min, price))) + 4}" y="${H - P - 4}" fill="${tone("--accent-text")}" font-size="11">your price</text>` : ""}
+      <text x="${P}" y="${H - 8}" fill="${tone("--muted")}" font-size="11">${money(min)}</text><text x="${W - P - 40}" y="${H - 8}" fill="${tone("--muted")}" font-size="11">${money(max)}</text>
     </svg>
-    <p class="hint"><span style="color:#ff5d73">too cheap</span> · <span style="color:#f4a259">cheap</span> · <span style="color:#6ea8fe">expensive</span> · <span style="color:#2dd4bf">too expensive</span>. Green band = acceptable range. Simulated answers; real surveys beat this.</p>`;
+    <p class="hint"><span style="color:var(--pass)">too cheap</span> · <span style="color:var(--think)">cheap</span> · <span style="color:var(--seg-1)">expensive</span> · <span style="color:var(--seg-3)">too expensive</span>. Green band = acceptable range. Simulated answers; real surveys beat this.</p>`;
 }
 
 // ---------------- numbers ----------------
@@ -1347,7 +1383,7 @@ async function computeVerdict() {
     const verdict = (lines[0] || "").replace("Verdict:", "").trim();
     $("#verdictOut").innerHTML = `
       <div class="verdict-big ${/profitable/i.test(verdict) ? "good" : "bad"}">${escapeHtml(verdict || "?")}</div>
-      ${lines.slice(1).map((l) => `<div class="check-line ${l.includes("✓") ? "ok" : "no"}">${escapeHtml(l.trim().replace(/^[✓✗×]\s*/, ""))}</div>`).join("")}
+      ${lines.slice(1).map((l) => `<div class="check-line ${l.includes("\u2713") ? "ok" : "no"}">${escapeHtml(l.trim().replace(/^[\u2713\u2717\u00d7]\s*/, ""))}</div>`).join("")}
       <div class="next-test"><strong>Next test</strong><span>${escapeHtml(nextTestFor(verdict, lines.slice(1)))}</span></div>
       <p class="hint">Computed by compile.py from numbers.json and the official panel (panel/results.json). Quick-sim runs never count.</p>
       <details><summary>business-plan.md</summary><div class="md">${markdown(out.plan || "")}</div></details>`;

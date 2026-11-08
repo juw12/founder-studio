@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Founder Studio · pre-launch simulator</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Ccircle cx='16' cy='13' r='6' fill='%230b0f1a'/%3E%3C/svg%3E">
-  <meta name="theme-color" content="#121314">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231b1a17'/%3E%3Ccircle cx='16' cy='12' r='5' fill='%23d9481f'/%3E%3Crect x='7' y='21' width='18' height='5' rx='2.5' fill='%23fffdf8'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#f4f1ea">
   <meta name="description" content="Founder Studio: watch simulated buyers decide on your product before you launch. Local, free, honest.">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -122,6 +122,12 @@
         </div>
         <div id="legend" class="legend"></div>
         <button id="hintOpen" class="hint-open" type="button" aria-label="How the arena works" title="How the arena works">?</button>
+        <div class="view-ctl" role="group" aria-label="Camera view">
+          <button type="button" data-view="overview" class="active" title="Whole square">Overview</button>
+          <button type="button" data-view="stall" title="Close to the stall">Stall</button>
+          <button type="button" data-view="top" title="From above">Top</button>
+        </div>
+        <aside id="botInspector" class="inspector" hidden aria-live="polite"></aside>
         <div id="toast" class="toast" hidden></div>
       </div>
 
@@ -136,7 +142,7 @@
       </nav>
       <div class="panels">
         <section id="tab-results" class="panel active"><div class="empty how">
-          <b>How it works</b>
+          <h3 class="how-title">How it works</h3>
           <ol>
             <li>Press <b>Run panel</b>. Simulated buyers walk up to your stall and read your pitch.</li>
             <li>An amber ring means a buyer is thinking.</li>

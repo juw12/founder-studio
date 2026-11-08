@@ -14,6 +14,12 @@ const THEME = {
   stallTop: tokenHex("--scene-stall-top", "#9aa6b6"),
   accent: tokenHex("--accent", "#1d4ed8"),
   sky: tokenHex("--scene-sky", "#ffffff"),
+  plaza: tokenHex("--scene-plaza", "#f6f1e6"),
+  path: tokenHex("--scene-path", "#ddd2bf"),
+  awning: tokenHex("--scene-awning", "#fffdf8"),
+  leaf: tokenHex("--scene-leaf", "#5f8a4a"),
+  trunk: tokenHex("--scene-trunk", "#8a5a2b"),
+  ink: tokenHex("--ink", "#1b1a17"),
   ground: tokenHex("--scene-ground", "#b9c1cc"),
   labelBg: token("--scene-label-bg", "rgba(255,255,255,0.96)"),
   labelFg: token("--scene-label-fg", "#14181f"),
@@ -67,27 +73,31 @@ function labelTexture(lines, { width = 512, height = 256, bg = THEME.labelBg, fg
   return texture;
 }
 
+const hex = (value) => "#" + value.toString(16).padStart(6, "0");
+
 function zoneDisc(color, label, x, z, radius) {
   const accent = "#" + color.toString(16).padStart(6, "0");
   const group = new THREE.Group();
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(radius, 64),
-    new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.11, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.16, roughness: 0.95 })
   );
   disc.rotation.x = -Math.PI / 2;
-  disc.position.y = 0.01;
+  disc.position.y = 0.03;
+  disc.receiveShadow = true;
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(radius - 0.08, radius, 96),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 })
+    new THREE.RingGeometry(radius - 0.14, radius, 96),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75 })
   );
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.02;
+  ring.position.y = 0.04;
   const signMaterial = new THREE.MeshBasicMaterial({
     map: labelTexture([label], { accent, big: true }),
     transparent: true,
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), signMaterial);
   sign.position.set(0, 2.6, -radius - 0.2);
+  sign.userData.billboard = true;
   group.add(disc, ring, sign);
   group.position.set(x, 0, z);
   // Redraws the sign with a live count, e.g. "BUY · 4".
@@ -105,27 +115,44 @@ function queueArea(width, z) {
   const group = new THREE.Group();
   const strip = new THREE.Mesh(
     new THREE.PlaneGeometry(width, 3.4),
-    new THREE.MeshStandardMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.08, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ color: THEME.path, roughness: 0.95 })
   );
   strip.rotation.x = -Math.PI / 2;
-  strip.position.y = 0.012;
+  strip.position.y = 0.025;
+  strip.receiveShadow = true;
   const edge = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.PlaneGeometry(width, 3.4)),
-    new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.45 })
+    new THREE.LineBasicMaterial({ color: THEME.stallTop, transparent: true, opacity: 0.35 })
   );
   edge.rotation.x = -Math.PI / 2;
-  edge.position.y = 0.02;
+  edge.position.y = 0.03;
   const signMaterial = new THREE.MeshBasicMaterial({
-    map: labelTexture(["QUEUE"], { accent: "#94a3b8", big: true }),
+    map: labelTexture(["QUEUE"], { accent: hex(THEME.stallTop), big: true }),
     transparent: true,
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.5), signMaterial);
   sign.position.set(width / 2 + 1.9, 1.2, 0);
+  sign.userData.billboard = true;
+  // Rope-line posts at the four corners.
+  const brass = new THREE.MeshStandardMaterial({ color: THEME.stallTop, roughness: 0.4, metalness: 0.3 });
+  for (const [px, pz] of [[-width / 2, -1.7], [width / 2, -1.7], [-width / 2, 1.7], [width / 2, 1.7]]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.9, 12), brass);
+    post.position.set(px, 0.45, pz);
+    post.castShadow = true;
+    group.add(post);
+  }
+  const rope = new THREE.MeshStandardMaterial({ color: THEME.accent, roughness: 0.7 });
+  for (const pz of [-1.7, 1.7]) {
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, width, 8), rope);
+    line.rotation.z = Math.PI / 2;
+    line.position.set(0, 0.82, pz);
+    group.add(line);
+  }
   group.add(strip, edge, sign);
   group.position.set(0, 0, z);
   group.userData.setCount = (count) => {
     signMaterial.map?.dispose();
-    signMaterial.map = labelTexture([count ? `QUEUE · ${count}` : "QUEUE"], { accent: "#94a3b8", big: true });
+    signMaterial.map = labelTexture([count ? `QUEUE · ${count}` : "QUEUE"], { accent: hex(THEME.stallTop), big: true });
     signMaterial.needsUpdate = true;
   };
   return group;
@@ -140,27 +167,31 @@ class Bot {
     const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.15 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.55, 6, 16), bodyMaterial);
     body.position.y = 0.72;
+    body.castShadow = true;
+    // Head: a light tint of the segment colour, so a buyer reads as one coloured figure.
+    const headColor = new THREE.Color(color).lerp(new THREE.Color(0xfffdf8), 0.62);
     const head = new THREE.Mesh(
       new THREE.SphereGeometry(0.3, 24, 16),
-      new THREE.MeshStandardMaterial({ color: 0xf2f4f8, roughness: 0.3, metalness: 0.1 })
+      new THREE.MeshStandardMaterial({ color: headColor, roughness: 0.45, metalness: 0.05 })
     );
+    head.castShadow = true;
     head.position.y = 1.45;
     const visor = new THREE.Mesh(
       new THREE.BoxGeometry(0.42, 0.14, 0.12),
-      new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.2 })
+      new THREE.MeshStandardMaterial({ color: THEME.ink, roughness: 0.25 })
     );
     visor.position.set(0, 1.47, 0.24);
-    this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x7dd3fc });
+    this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xfff1d6 });
     const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), this.eyeMaterial);
     const eyeRight = eyeLeft.clone();
     eyeLeft.position.set(-0.09, 1.47, 0.31);
     eyeRight.position.set(0.09, 1.47, 0.31);
     const antenna = new THREE.Mesh(
       new THREE.CylinderGeometry(0.015, 0.015, 0.25),
-      new THREE.MeshStandardMaterial({ color: 0x9aa4b8 })
+      new THREE.MeshStandardMaterial({ color: THEME.stallTop })
     );
     antenna.position.y = 1.85;
-    this.bulbMaterial = new THREE.MeshBasicMaterial({ color: 0x9aa4b8 });
+    this.bulbMaterial = new THREE.MeshBasicMaterial({ color: THEME.accent });
     this.bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), this.bulbMaterial);
     this.bulb.position.y = 2.0;
     this.ring = new THREE.Mesh(
@@ -171,7 +202,7 @@ class Bot {
     this.ring.visible = false;
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 24),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
+      new THREE.MeshBasicMaterial({ color: THEME.ink, transparent: true, opacity: 0.12 })
     );
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.015;
@@ -251,11 +282,11 @@ class Bot {
 
 // Reviewer bots apply one board lens each. They look different from buyers on purpose:
 // light body, accent cap and a clipboard, and an accent ring on the floor.
-const REVIEW_COLORS = { fix: THEME.accent, ok: BUY_COLOR, you: 0x94a3b8 };
+const REVIEW_COLORS = { fix: THEME.accent, ok: BUY_COLOR, you: THEME.stallTop };
 
 class ReviewerBot extends Bot {
   constructor(reviewer, spawn) {
-    super({ id: reviewer.id, name: reviewer.name }, 0xcbd5e1, spawn);
+    super({ id: reviewer.id, name: reviewer.name }, THEME.awning, spawn);
     this.reviewer = reviewer;
     const accent = new THREE.MeshStandardMaterial({ color: THEME.accent, roughness: 0.4, metalness: 0.1 });
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.33, 0.1, 24), accent);
@@ -264,7 +295,7 @@ class ReviewerBot extends Bot {
     brim.position.set(0, 1.66, 0.3);
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(0.38, 0.48, 0.04),
-      new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 })
+      new THREE.MeshStandardMaterial({ color: THEME.panel ?? 0xfffdf8, roughness: 0.6 })
     );
     board.position.set(0.18, 0.85, 0.36);
     board.rotation.x = -0.35;
@@ -293,8 +324,8 @@ class ReviewerBot extends Bot {
 
   clearVerdict() {
     this.state = "idle";
-    this.bulbMaterial.color.setHex(0x9aa4b8);
-    this.eyeMaterial.color.setHex(0x7dd3fc);
+    this.bulbMaterial.color.setHex(THEME.accent);
+    this.eyeMaterial.color.setHex(0xfff1d6);
     this.homeRing.material.color.setHex(THEME.accent);
   }
 }
@@ -314,7 +345,8 @@ export class Arena {
     this.clock = new THREE.Clock();
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = false;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
     this.labelLayer = document.createElement("div");
     this.labelLayer.className = "bot-labels";
@@ -322,28 +354,77 @@ export class Arena {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(THEME.sceneBg);
-    this.scene.fog = new THREE.Fog(THEME.sceneBg, 28, 60);
+    this.scene.fog = new THREE.Fog(THEME.sceneBg, 34, 70);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
     this.orbit = { azimuth: 0.0, elevation: 0.86, radius: 24, target: new THREE.Vector3(0, 1.4, 1.5) };
     this.updateCamera();
 
-    this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 0.9));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-    sun.position.set(6, 14, 8);
+    // Warm afternoon light: sky fill, one sun with soft shadows, a cool bounce from the other side.
+    this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 1.6));
+    const sun = new THREE.DirectionalLight(0xfff0d8, 1.15);
+    sun.position.set(9, 18, 11);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -24;
+    sun.shadow.camera.right = 24;
+    sun.shadow.camera.top = 24;
+    sun.shadow.camera.bottom = -24;
+    sun.shadow.camera.far = 60;
+    sun.shadow.bias = -0.0006;
+    sun.shadow.radius = 4;
     this.scene.add(sun);
-    const rim = new THREE.PointLight(THEME.accent, 12, 30);
-    rim.position.set(0, 5, -4);
-    this.scene.add(rim);
+    const bounce = new THREE.DirectionalLight(0xdfe8f2, 0.35);
+    bounce.position.set(-10, 8, -6);
+    this.scene.add(bounce);
 
+    // Ground: paper floor, a lighter market square, and worn paths queue -> stall -> zones.
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(40, 96),
-      new THREE.MeshStandardMaterial({ color: THEME.floor, roughness: 0.95 })
+      new THREE.CircleGeometry(60, 96),
+      new THREE.MeshStandardMaterial({ color: THEME.floor, roughness: 1 })
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     this.scene.add(ground);
-    const grid = new THREE.GridHelper(80, 80, THEME.grid, THEME.gridMinor);
-    grid.position.y = 0.005;
-    this.scene.add(grid);
+    // The square and its worn paths are painted into one texture: separate coplanar path planes
+    // shaded unevenly and read as dark slabs, while one textured disc stays flat and calm.
+    const PLAZA_R = 17.5;
+    const plazaCanvas = document.createElement("canvas");
+    plazaCanvas.width = plazaCanvas.height = 1024;
+    const pc = plazaCanvas.getContext("2d");
+    const toPx = (x, z) => [((x / PLAZA_R + 1) / 2) * 1024, ((z / PLAZA_R + 1) / 2) * 1024];
+    const pxPerUnit = 1024 / (2 * PLAZA_R);
+    pc.fillStyle = hex(THEME.plaza);
+    pc.fillRect(0, 0, 1024, 1024);
+    pc.lineCap = "round";
+    const paintPath = (x1, z1, x2, z2, width) => {
+      const [ax, ay] = toPx(x1, z1);
+      const [bx, by] = toPx(x2, z2);
+      for (const [grow, alpha] of [[1.35, 0.35], [1, 1]]) {
+        pc.globalAlpha = alpha;
+        pc.strokeStyle = hex(THEME.path);
+        pc.lineWidth = width * grow * pxPerUnit;
+        pc.beginPath();
+        pc.moveTo(ax, ay);
+        pc.lineTo(bx, by);
+        pc.stroke();
+      }
+      pc.globalAlpha = 1;
+    };
+    paintPath(0, QUEUE_Z + 1.7, 0, -1.2, 2.2);
+    paintPath(1.8, 1.6, 9, ZONE_Z - 1, 1.6);
+    paintPath(-1.8, 1.6, -9, ZONE_Z - 1, 1.6);
+    const plazaTexture = new THREE.CanvasTexture(plazaCanvas);
+    plazaTexture.colorSpace = THREE.SRGBColorSpace;
+    plazaTexture.anisotropy = 4;
+    const plaza = new THREE.Mesh(
+      new THREE.CircleGeometry(PLAZA_R, 96),
+      new THREE.MeshStandardMaterial({ map: plazaTexture, roughness: 0.95 })
+    );
+    plaza.rotation.x = -Math.PI / 2;
+    plaza.position.y = 0.005;
+    plaza.receiveShadow = true;
+    this.scene.add(plaza);
+    this.buildDecor();
 
     this.buildStall();
     this.buyZone = zoneDisc(BUY_COLOR, "BUY", 9, ZONE_Z, ZONE_R);
@@ -353,6 +434,18 @@ export class Arena {
     this.scene.add(this.queueZone);
     this.previewBots = [];
     this.selectedId = null;
+    this.hoveredId = null;
+    this.view = "overview";
+    this.orbitGoal = null;
+    this.lastInteraction = 0;
+    this.selectRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.7, 40),
+      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.9 })
+    );
+    this.selectRing.rotation.x = -Math.PI / 2;
+    this.selectRing.position.y = 0.05;
+    this.selectRing.visible = false;
+    this.scene.add(this.selectRing);
     this.lastDecidedId = null;
 
     this.raycaster = new THREE.Raycaster();
@@ -364,33 +457,99 @@ export class Arena {
   }
 
   buildStall() {
+    // A small market stall: wooden platform and counter, two posts, striped awning, the pitch sign above.
     this.stall = new THREE.Group();
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.3, 2.5, 0.25, 48),
-      new THREE.MeshStandardMaterial({ color: THEME.stall, roughness: 0.6, metalness: 0.1 })
+    const wood = new THREE.MeshStandardMaterial({ color: THEME.stall, roughness: 0.75 });
+    const darkWood = new THREE.MeshStandardMaterial({ color: THEME.stallTop, roughness: 0.6 });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.22, 48), darkWood);
+    base.position.y = 0.11;
+    base.receiveShadow = true;
+    base.castShadow = true;
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.62, 2.78, 96),
+      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.85 })
     );
-    base.position.y = 0.12;
-    const glow = new THREE.Mesh(
-      new THREE.RingGeometry(2.45, 2.6, 96),
-      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0.5 })
-    );
-    glow.rotation.x = -Math.PI / 2;
-    glow.position.y = 0.26;
-    const counter = new THREE.Mesh(
-      new THREE.BoxGeometry(2.6, 1.0, 1.0),
-      new THREE.MeshStandardMaterial({ color: THEME.stallTop, roughness: 0.4, metalness: 0.1 })
-    );
-    counter.position.set(0, 0.75, 0);
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 2.4),
-      new THREE.MeshStandardMaterial({ color: 0x9aa4b8 })
-    );
-    pole.position.set(0, 1.9, -0.3);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.02;
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.0, 1.1), wood);
+    counter.position.set(0, 0.72, 0.2);
+    counter.castShadow = true;
+    counter.receiveShadow = true;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.1, 1.3), darkWood);
+    top.position.set(0, 1.27, 0.2);
+    top.castShadow = true;
+    // Goods on the counter: three jars in the accent and segment colours.
+    const goods = [THEME.accent, SEGMENT_COLORS[0], SEGMENT_COLORS[2]];
+    goods.forEach((color, i) => {
+      const jar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.16, 0.16, 0.34, 16),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.4 })
+      );
+      jar.position.set(-0.7 + i * 0.7, 1.49, 0.35);
+      jar.castShadow = true;
+      this.stall.add(jar);
+    });
+    for (const x of [-1.45, 1.45]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.7, 12), darkWood);
+      post.position.set(x, 1.45, -0.35);
+      post.castShadow = true;
+      this.stall.add(post);
+    }
+    const stripes = 7;
+    for (let i = 0; i < stripes; i++) {
+      const slat = new THREE.Mesh(
+        new THREE.BoxGeometry(3.4 / stripes, 0.06, 1.7),
+        new THREE.MeshStandardMaterial({ color: i % 2 ? THEME.awning : THEME.accent, roughness: 0.8 })
+      );
+      slat.position.set(-1.7 + (i + 0.5) * (3.4 / stripes), 2.78, 0.35);
+      slat.rotation.x = 0.28;
+      slat.castShadow = true;
+      this.stall.add(slat);
+    }
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2), darkWood);
+    pole.position.set(0, 3.3, -0.45);
     this.signMaterial = new THREE.MeshBasicMaterial({ map: labelTexture(["Your product", "pitch goes here"]), transparent: true });
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 2.5), this.signMaterial);
-    sign.position.set(0, 3.2, -0.3);
-    this.stall.add(base, glow, counter, pole, sign);
+    sign.position.set(0, 4.15, -0.3);
+    sign.userData.billboard = true;
+    this.stall.add(base, ring, counter, top, pole, sign);
     this.scene.add(this.stall);
+  }
+
+  // Trees and lamps around the square: they give the scene depth and scale without crowding the paths.
+  buildDecor() {
+    const leaf = new THREE.MeshStandardMaterial({ color: THEME.leaf, roughness: 0.85, flatShading: true });
+    const leafLight = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(THEME.leaf).lerp(new THREE.Color(0xf4e3a1), 0.35), roughness: 0.85, flatShading: true,
+    });
+    const trunk = new THREE.MeshStandardMaterial({ color: THEME.trunk, roughness: 0.9 });
+    const spots = [[-16, -8, 1.2], [16, -8, 1.1], [-19, 3, 1.35], [19, 3, 1.25], [-13, 12, 1.0], [13, 12, 1.05], [-6, -13, 0.9], [7, -13, 1.0]];
+    spots.forEach(([x, z, s], i) => {
+      const tree = new THREE.Group();
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 1.6 * s, 8), trunk);
+      stem.position.y = 0.8 * s;
+      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25 * s, 0), i % 2 ? leaf : leafLight);
+      crown.position.y = 2.2 * s;
+      const crown2 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85 * s, 0), i % 2 ? leafLight : leaf);
+      crown2.position.set(0.5 * s, 2.9 * s, 0.2 * s);
+      for (const mesh of [stem, crown, crown2]) {
+        mesh.castShadow = true;
+        tree.add(mesh);
+      }
+      tree.position.set(x, 0, z);
+      tree.rotation.y = i * 1.3;
+      this.scene.add(tree);
+    });
+    const lampPost = new THREE.MeshStandardMaterial({ color: THEME.ink, roughness: 0.5, metalness: 0.4 });
+    const lampGlow = new THREE.MeshBasicMaterial({ color: 0xffe2a8 });
+    for (const [x, z] of [[-5.5, -4.5], [5.5, -4.5], [-14, 9], [14, 9]]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.2, 10), lampPost);
+      post.position.set(x, 1.6, z);
+      post.castShadow = true;
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), lampGlow);
+      bulb.position.set(x, 3.3, z);
+      this.scene.add(post, bulb);
+    }
   }
 
   setStall(title, subtitle) {
@@ -403,36 +562,93 @@ export class Arena {
 
   bindControls() {
     const canvas = this.renderer.domElement;
+    canvas.tabIndex = 0;
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", "3D market square. Drag to orbit, scroll or pinch to zoom, click a buyer for details. Arrow keys orbit, plus and minus zoom.");
+    const pointers = new Map();
     let moved = 0;
     let last = null;
+    let pinch = 0;
+    const touched = () => {
+      this.lastInteraction = performance.now();
+      this.orbitGoal = null;
+    };
     canvas.addEventListener("pointerdown", (event) => {
+      pointers.set(event.pointerId, [event.clientX, event.clientY]);
+      canvas.setPointerCapture(event.pointerId);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinch = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        return;
+      }
       this.dragging = true;
       moved = 0;
       last = [event.clientX, event.clientY];
-      canvas.setPointerCapture(event.pointerId);
     });
     canvas.addEventListener("pointermove", (event) => {
-      if (!this.dragging) return;
+      if (pointers.has(event.pointerId)) pointers.set(event.pointerId, [event.clientX, event.clientY]);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const distance = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (pinch) this.zoomBy(pinch / distance);
+        pinch = distance;
+        moved = 99;
+        touched();
+        return;
+      }
+      if (!this.dragging) {
+        this.hoverAt(event);
+        return;
+      }
       const dx = event.clientX - last[0];
       const dy = event.clientY - last[1];
       moved += Math.abs(dx) + Math.abs(dy);
       last = [event.clientX, event.clientY];
-      this.orbit.azimuth -= dx * 0.006;
-      this.orbit.elevation = Math.min(1.35, Math.max(0.15, this.orbit.elevation + dy * 0.005));
-      this.updateCamera();
+      if (moved > 4) {
+        touched();
+        this.orbit.azimuth -= dx * 0.006;
+        this.orbit.elevation = Math.min(1.4, Math.max(0.15, this.orbit.elevation + dy * 0.005));
+        this.updateCamera();
+      }
     });
-    canvas.addEventListener("pointerup", (event) => {
+    const release = (event) => {
+      pointers.delete(event.pointerId);
+      if (pointers.size < 2) pinch = 0;
+      if (!this.dragging) return;
       this.dragging = false;
-      if (moved < 6) this.pick(event);
-    });
+      if (moved < 6 && event.type === "pointerup") this.pick(event);
+    };
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+    canvas.addEventListener("pointerleave", () => this.setHover(null));
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault();
-      this.orbit.radius = Math.min(48, Math.max(8, this.orbit.radius * (1 + Math.sign(event.deltaY) * 0.08)));
-      this.updateCamera();
+      touched();
+      this.zoomBy(1 + Math.sign(event.deltaY) * 0.08);
     }, { passive: false });
+    canvas.addEventListener("keydown", (event) => {
+      const step = { ArrowLeft: [0.12, 0], ArrowRight: [-0.12, 0], ArrowUp: [0, -0.08], ArrowDown: [0, 0.08] }[event.key];
+      if (step) {
+        event.preventDefault();
+        touched();
+        this.orbit.azimuth += step[0];
+        this.orbit.elevation = Math.min(1.4, Math.max(0.15, this.orbit.elevation + step[1]));
+        this.updateCamera();
+      } else if (event.key === "+" || event.key === "=" || event.key === "-") {
+        event.preventDefault();
+        touched();
+        this.zoomBy(event.key === "-" ? 1.1 : 0.9);
+      }
+    });
   }
 
-  pick(event) {
+  zoomBy(factor) {
+    this.orbit.radius = Math.min(52, Math.max(7, this.orbit.radius * factor));
+    this.updateCamera();
+  }
+
+  // Bot id under the pointer (buyers and reviewers), or null.
+  botAt(event) {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(this.pointer, this.camera);
@@ -440,11 +656,73 @@ export class Arena {
     for (const hit of hits) {
       let node = hit.object;
       while (node && !node.userData.botId) node = node.parent;
-      if (node) {
-        this.onSelect?.(node.userData.botId);
-        return;
-      }
+      if (node) return node.userData.botId;
     }
+    return null;
+  }
+
+  hoverAt(event) {
+    const now = performance.now();
+    if (now - (this.lastHoverCheck || 0) < 50) return;
+    this.lastHoverCheck = now;
+    this.setHover(this.botAt(event));
+  }
+
+  setHover(id) {
+    if (id === this.hoveredId) return;
+    this.hoveredId = id;
+    this.renderer.domElement.classList.toggle("hovering", Boolean(id));
+  }
+
+  // Camera presets with a smooth move: overview (whole square), stall (close), top (from above).
+  setView(name) {
+    const base = this.baseRadius || 27;
+    const views = {
+      overview: { azimuth: 0, elevation: 0.86, radius: base, target: this.baseTarget.clone() },
+      stall: { azimuth: 0.35, elevation: 0.42, radius: Math.max(11, base * 0.48), target: new THREE.Vector3(0, 1.6, 0.6) },
+      top: { azimuth: 0, elevation: 1.38, radius: base * 1.02, target: new THREE.Vector3(0, 0, -0.6) },
+    };
+    const goal = views[name] || views.overview;
+    this.view = name in views ? name : "overview";
+    // Take the short way round from the current azimuth.
+    const twoPi = Math.PI * 2;
+    goal.azimuth = this.orbit.azimuth + ((((goal.azimuth - this.orbit.azimuth) % twoPi) + twoPi + Math.PI) % twoPi - Math.PI);
+    this.orbitGoal = goal;
+    this.lastInteraction = performance.now();
+  }
+
+  // Signs turn about their vertical axis to face the camera, so they stay readable at any orbit angle.
+  faceSignsToCamera() {
+    if (!this.billboards) {
+      this.billboards = [];
+      this.scene.traverse((object) => {
+        if (object.userData.billboard) this.billboards.push(object);
+      });
+    }
+    const worldPosition = new THREE.Vector3();
+    for (const sign of this.billboards) {
+      sign.getWorldPosition(worldPosition);
+      sign.rotation.y = Math.atan2(this.camera.position.x - worldPosition.x, this.camera.position.z - worldPosition.z);
+    }
+  }
+
+  // Page coordinates of a bot's body (used by automated checks and for anchoring UI).
+  screenPointOf(id) {
+    const bot = this.bots.get(id) || this.reviewers.get(id);
+    if (!bot) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const point = new THREE.Vector3(bot.group.position.x, 0.95, bot.group.position.z).project(this.camera);
+    const x = rect.left + ((point.x + 1) / 2) * rect.width;
+    const y = rect.top + ((1 - point.y) / 2) * rect.height;
+    const inFrame = point.z < 1 && x > rect.left + 4 && x < rect.right - 4 && y > rect.top + 4 && y < rect.bottom - 4;
+    // Visible means a click there reaches the canvas, not an overlay card on top of it.
+    const visible = inFrame && document.elementFromPoint(x, y) === this.renderer.domElement;
+    return { x, y, visible };
+  }
+
+  pick(event) {
+    const id = this.botAt(event);
+    if (id) this.onSelect?.(id);
   }
 
   updateCamera() {
@@ -466,11 +744,16 @@ export class Arena {
     this.renderer.setSize(clientWidth, clientHeight, false);
     this.camera.aspect = clientWidth / clientHeight;
     // Keep both decision zones (x = +/-12.6) in frame on narrow screens.
-    this.orbit.radius = Math.min(42, Math.max(27, 27 * (1.45 / this.camera.aspect)));
+    this.baseRadius = Math.min(42, Math.max(27, 27 * (1.45 / this.camera.aspect)));
     // The HUD covers the top of the canvas, so aim a little behind the stall: the queue
     // clears the HUD and both zones stay in frame. Phones have the HUD above the canvas.
-    this.orbit.target.z = clientWidth < 600 ? 1.5 : -1.2;
-    this.orbit.target.y = clientWidth < 600 ? 1.4 : 3.2;
+    this.baseTarget = new THREE.Vector3(0, clientWidth < 600 ? 1.4 : 3.2, clientWidth < 600 ? 1.5 : -1.2);
+    if (this.view === "overview" && !this.orbitGoal) {
+      this.orbit.radius = this.baseRadius;
+      this.orbit.target.copy(this.baseTarget);
+    } else {
+      this.setView(this.view);
+    }
     this.updateCamera();
     this.camera.updateProjectionMatrix();
   }
@@ -674,6 +957,7 @@ export class Arena {
 
   highlight(id) {
     this.selectedId = id;
+    this.selectRing.visible = Boolean(id && (this.bots.has(id) || this.reviewers.has(id)));
     for (const [botId, label] of this.labels) label.classList.toggle("selected", botId === id);
     for (const [botId, label] of this.reviewerLabels || []) label.classList.toggle("selected", botId === id);
   }
@@ -693,10 +977,31 @@ export class Arena {
     let anyMoving = false;
     for (const bot of [...this.bots.values(), ...this.reviewers.values()]) anyMoving = bot.update(dt, time) || anyMoving;
     for (const bot of this.previewBots) bot.update(dt, time);
-    if (!anyMoving && !this.dragging) {
-      this.orbit.azimuth += dt * 0.03;
+    if (this.orbitGoal) {
+      const k = Math.min(1, dt * 4);
+      const goal = this.orbitGoal;
+      this.orbit.azimuth += (goal.azimuth - this.orbit.azimuth) * k;
+      this.orbit.elevation += (goal.elevation - this.orbit.elevation) * k;
+      this.orbit.radius += (goal.radius - this.orbit.radius) * k;
+      this.orbit.target.lerp(goal.target, k);
+      if (Math.abs(goal.radius - this.orbit.radius) < 0.02 && Math.abs(goal.azimuth - this.orbit.azimuth) < 0.002) this.orbitGoal = null;
+      this.updateCamera();
+    } else if (!anyMoving && !this.dragging && this.view === "overview" && performance.now() - this.lastInteraction > 8000) {
+      this.orbit.azimuth += dt * 0.025;
       this.updateCamera();
     }
+    for (const [id, bot] of [...this.bots, ...this.reviewers]) {
+      const lift = id === this.hoveredId || id === this.selectedId ? 1.14 : 1;
+      const scale = bot.group.scale.x + (lift - bot.group.scale.x) * Math.min(1, dt * 12);
+      bot.group.scale.setScalar(scale);
+    }
+    const chosen = this.bots.get(this.selectedId) || this.reviewers.get(this.selectedId);
+    if (chosen) {
+      this.selectRing.position.x = chosen.group.position.x;
+      this.selectRing.position.z = chosen.group.position.z;
+      this.selectRing.scale.setScalar(1 + Math.sin(time * 4) * 0.06);
+    }
+    this.faceSignsToCamera();
     this.renderer.render(this.scene, this.camera);
     const width = this.renderer.domElement.clientWidth;
     const height = this.renderer.domElement.clientHeight;
@@ -706,7 +1011,7 @@ export class Arena {
     const candidates = [];
     for (const [id, bot] of this.bots) {
       const label = this.labels.get(id);
-      const selected = id === this.selectedId;
+      const selected = id === this.selectedId || id === this.hoveredId;
       // Queued bots stay unlabelled. Settled bots in a pile drop their tag (the zone sign
       // carries the count); only the latest decision and the selected bot keep a name.
       const settled = bot.state === "buy" || bot.state === "pass";
@@ -765,7 +1070,7 @@ export class Arena {
       return { left: Math.min(x1, x2), right: Math.max(x1, x2), top: Math.min(y1, y2), bottom: Math.max(y1, y2) };
     };
     const reserved = [
-      signBox(-2.5, 4.45, 2.5, 1.95, -0.3),
+      signBox(-2.5, 5.4, 2.5, 2.9, -0.3),
       signBox(9 - 1.9, 3.6, 9 + 1.9, 1.6, ZONE_Z - ZONE_R - 0.2),
       signBox(-9 - 1.9, 3.6, -9 + 1.9, 1.6, ZONE_Z - ZONE_R - 0.2),
     ];

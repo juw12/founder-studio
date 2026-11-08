@@ -47,6 +47,7 @@ WRITE_LOCK = threading.Lock()
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
+    ".woff2": "font/woff2",
     ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8",
     ".svg": "image/svg+xml",
@@ -383,7 +384,7 @@ def make_handler(studio):
             relative = "index.html" if path in ("/", "") else path.lstrip("/")
             target = (APP_DIR / relative).resolve()
             public = {APP_DIR / "index.html", APP_DIR / "styles.css"}
-            in_public_dir = any(folder in target.parents for folder in (APP_DIR / "js", APP_DIR / "vendor"))
+            in_public_dir = any(folder in target.parents for folder in (APP_DIR / "js", APP_DIR / "vendor", APP_DIR / "fonts"))
             if (target not in public and not in_public_dir) or target.suffix not in MIME or not target.is_file():
                 self.send_response(404)
                 self.end_headers()
