@@ -19,6 +19,7 @@ const THEME = {
   awning: tokenHex("--scene-awning", "#fffdf8"),
   leaf: tokenHex("--scene-leaf", "#5f8a4a"),
   trunk: tokenHex("--scene-trunk", "#8a5a2b"),
+  stone: tokenHex("--scene-stone", "#d9cdb8"),
   ink: tokenHex("--ink", "#1b1a17"),
   ground: tokenHex("--scene-ground", "#b9c1cc"),
   labelBg: token("--scene-label-bg", "rgba(255,255,255,0.96)"),
@@ -112,6 +113,40 @@ function zoneDisc(color, label, x, z, radius) {
 
 // The waiting line behind the stall: a soft floor strip with a "QUEUE" sign, so the idle
 // scene already reads left to right as queue -> stall -> BUY / PASS.
+// A closed neighbour stall: platform, shuttered counter and a striped awning in a muted segment colour.
+function neighbourStall(x, z, turn, color) {
+  const group = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: THEME.stall, roughness: 0.8 });
+  const shutter = new THREE.MeshStandardMaterial({ color: THEME.stallTop, roughness: 0.7 });
+  const muted = new THREE.Color(color).lerp(new THREE.Color(THEME.awning), 0.45);
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 1.0), wood);
+  counter.position.y = 0.5;
+  const front = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 0.04), shutter);
+  front.position.set(0, 1.45, 0.48);
+  group.add(counter, front);
+  for (const side of [-1.2, 1.2]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.3, 10), shutter);
+    post.position.set(side, 1.15, -0.4);
+    group.add(post);
+  }
+  for (let i = 0; i < 6; i++) {
+    const slat = new THREE.Mesh(
+      new THREE.BoxGeometry(2.9 / 6, 0.05, 1.4),
+      new THREE.MeshStandardMaterial({ color: i % 2 ? THEME.awning : muted, roughness: 0.85 })
+    );
+    slat.position.set(-1.45 + (i + 0.5) * (2.9 / 6), 2.32, 0.2);
+    slat.rotation.x = 0.26;
+    group.add(slat);
+  }
+  group.traverse((mesh) => {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+  });
+  group.position.set(x, 0, z);
+  group.rotation.y = turn;
+  return group;
+}
+
 function queueArea(width, z) {
   const group = new THREE.Group();
   const strip = new THREE.Mesh(
@@ -457,6 +492,23 @@ export class Arena {
       pc.fillRect(rand() * 1024, rand() * 1024, 2 + rand() * 3, 2 + rand() * 3);
     }
     pc.globalAlpha = 1;
+    // A band of pavers just inside the edge: the square reads as a built place, not a painted disc.
+    const paverRing = PLAZA_R - 0.9;
+    const pavers = Math.round((2 * Math.PI * paverRing) / 0.9);
+    pc.fillStyle = hex(THEME.path);
+    for (let row = 0; row < 2; row++) {
+      for (let i = 0; i < pavers; i++) {
+        const angle = ((i + row * 0.5) / pavers) * Math.PI * 2;
+        const radius = (paverRing - row * 0.55) * pxPerUnit;
+        pc.save();
+        pc.translate(512 + Math.cos(angle) * radius, 512 + Math.sin(angle) * radius);
+        pc.rotate(angle);
+        pc.globalAlpha = 0.28 + rand() * 0.12;
+        pc.fillRect(-0.24 * pxPerUnit, -0.4 * pxPerUnit, 0.48 * pxPerUnit, 0.8 * pxPerUnit);
+        pc.restore();
+      }
+    }
+    pc.globalAlpha = 1;
     paintPath(0, QUEUE_Z + 1.7, 0, -1.2, 2.2);
     paintPath(1.8, 1.6, 9, ZONE_Z - 1, 1.6);
     paintPath(-1.8, 1.6, -9, ZONE_Z - 1, 1.6);
@@ -471,6 +523,20 @@ export class Arena {
     plaza.position.y = 0.005;
     plaza.receiveShadow = true;
     this.scene.add(plaza);
+    const curb = new THREE.Mesh(
+      new THREE.CylinderGeometry(PLAZA_R + 0.18, PLAZA_R + 0.18, 0.16, 128, 1, true),
+      new THREE.MeshStandardMaterial({ color: THEME.stone, roughness: 0.9, side: THREE.DoubleSide })
+    );
+    curb.position.y = 0.08;
+    curb.receiveShadow = true;
+    const curbTop = new THREE.Mesh(
+      new THREE.RingGeometry(PLAZA_R, PLAZA_R + 0.36, 128),
+      new THREE.MeshStandardMaterial({ color: THEME.stone, roughness: 0.9 })
+    );
+    curbTop.rotation.x = -Math.PI / 2;
+    curbTop.position.y = 0.161;
+    curbTop.receiveShadow = true;
+    this.scene.add(curb, curbTop);
     this.buildDecor();
 
     this.buildStall();
@@ -577,6 +643,42 @@ export class Arena {
     sign.position.set(0, 4.15, -0.3);
     sign.userData.billboard = true;
     this.stall.add(base, ring, counter, top, pole, sign);
+    // String lights along the front of the awning: warm bulbs on a sagging cable.
+    const bulbMaterial = new THREE.MeshBasicMaterial({ color: 0xffd68a });
+    const cablePoints = [];
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20;
+      cablePoints.push(new THREE.Vector3(-1.6 + 3.2 * t, 2.42 - Math.sin(Math.PI * t) * 0.22, 1.08));
+    }
+    this.stall.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(cablePoints),
+      new THREE.LineBasicMaterial({ color: THEME.ink, transparent: true, opacity: 0.55 })
+    ));
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10;
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), bulbMaterial);
+      bulb.position.set(-1.6 + 3.2 * t, 2.34 - Math.sin(Math.PI * t) * 0.22, 1.08);
+      this.stall.add(bulb);
+    }
+    // Stock beside the stall: stacked crates on one side, sacks on the other. Clear of the queue path.
+    const crateWood = new THREE.MeshStandardMaterial({ color: THEME.trunk, roughness: 0.85 });
+    [[2.95, 0.3, -0.9, 0.2], [2.95, 0.9, -0.9, -0.15], [3.65, 0.3, -0.5, 0.5]].forEach(([x, y, z, turn]) => {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.6, 0.62), crateWood);
+      crate.position.set(x, y, z);
+      crate.rotation.y = turn;
+      crate.castShadow = true;
+      crate.receiveShadow = true;
+      this.stall.add(crate);
+    });
+    const burlap = new THREE.MeshStandardMaterial({ color: 0xc9b48c, roughness: 1, flatShading: true });
+    [[-2.95, -0.8], [-3.5, -0.4], [-3.15, 0.05]].forEach(([x, z], i) => {
+      const sack = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34, 0), burlap);
+      sack.scale.set(1, 1.25, 1);
+      sack.position.set(x, 0.36, z);
+      sack.rotation.y = i * 0.9;
+      sack.castShadow = true;
+      this.stall.add(sack);
+    });
     this.scene.add(this.stall);
   }
 
@@ -684,6 +786,40 @@ export class Arena {
       new THREE.BufferGeometry().setFromPoints(linePoints),
       new THREE.LineBasicMaterial({ color: THEME.ink, transparent: true, opacity: 0.5 })
     ));
+    this.buildFountain(0, 12.4);
+    // Two shuttered neighbour stalls behind the queue: the square is a market, yours is the open one.
+    [[-11.2, -11.4, 0.35, SEGMENT_COLORS[0]], [11.2, -11.4, -0.35, SEGMENT_COLORS[2]]].forEach(([x, z, turn, color]) => {
+      this.scene.add(neighbourStall(x, z, turn, color));
+    });
+  }
+
+  // A low stone fountain in the open foreground: a focal point that never blocks the stall.
+  buildFountain(x, z) {
+    const stone = new THREE.MeshStandardMaterial({ color: THEME.stone, roughness: 0.85 });
+    const water = new THREE.MeshStandardMaterial({ color: 0x8fbcc4, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85 });
+    const fountain = new THREE.Group();
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.8, 0.5, 40, 1, true), stone);
+    basin.position.y = 0.25;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(1.72, 0.1, 8, 48), stone);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.5;
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1.68, 40), water);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.y = 0.4;
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 1.1, 16), stone);
+    column.position.y = 0.95;
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.3, 0.22, 24), stone);
+    bowl.position.y = 1.5;
+    const spout = new THREE.Mesh(new THREE.CircleGeometry(0.55, 24), water);
+    spout.rotation.x = -Math.PI / 2;
+    spout.position.y = 1.62;
+    for (const mesh of [basin, rim, column, bowl]) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
+    fountain.add(basin, rim, pool, column, bowl, spout);
+    fountain.position.set(x, 0, z);
+    this.scene.add(fountain);
   }
 
   setStall(title, subtitle) {
