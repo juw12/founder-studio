@@ -76,7 +76,7 @@
       </details>
 
       <details id="pitchSection" open>
-        <summary><span class="step">3</span> Pitch (what each bot reads)</summary>
+        <summary><span class="step">3</span> Pitch (what each bot reads) <span id="pitchSummary" class="sum-note"></span></summary>
         <textarea id="pitch" rows="8" placeholder="3-6 plain lines: product, price, where/how, opening offer"></textarea>
         <p class="hint">Plain words, no superlatives, nothing you can't deliver.</p>
       </details>
@@ -119,6 +119,7 @@
           </div>
         </div>
         <div id="ticker" class="ticker" aria-live="polite" hidden></div>
+        <button id="miniRoster" class="mini-roster" type="button" hidden aria-label="Every buyer's state; open the full list"></button>
         <div id="arenaHint" class="arena-hint" role="note">
           <span>Press <b>Run panel</b>: each buyer leaves the queue, reads your pitch at the stall, then walks to <b style="color:var(--buy)">BUY</b> or <b style="color:var(--pass)">PASS</b>.</span>
           <button class="hint-close" id="hintClose" aria-label="Hide this tip">Hide</button>

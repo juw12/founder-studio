@@ -150,6 +150,7 @@ async function loadProject(name) {
   state.need = saved.need || {};
   state.addressed = saved.addressed || {};
   $("#pitch").value = saved.pitch || data.pitch || "";
+  updatePitchSummary(true);
   $("#pitchB").value = saved.pitchB || "";
   $("#idea").value = state.idea;
   $("#price").value = saved.price ?? data.numbers?.price ?? "";
@@ -197,6 +198,15 @@ function updateProductSummary(setOpenState = false) {
   const shortName = business.split(/[(\-–—,]/)[0].trim().slice(0, 28);
   $("#productSummary").textContent = business && price ? `${shortName} · ${priceLabel()} · edit` : "";
   if (setOpenState) $("#productSection").open = !(business && price);
+}
+
+// Step 3 shows the pitch's first line when collapsed, so a filled pitch is not a wall of text.
+function updatePitchSummary(setOpenState = false) {
+  const pitch = $("#pitch").value.trim();
+  const lineCount = pitch ? pitch.split(/\n+/).length : 0;
+  const firstLine = pitch.split("\n")[0].slice(0, 44);
+  $("#pitchSummary").textContent = pitch ? `${firstLine}${firstLine.length >= 44 ? "…" : ""} · ${lineCount} line${lineCount === 1 ? "" : "s"} · edit` : "";
+  if (setOpenState) $("#pitchSection").open = !pitch;
 }
 
 function renderSetup() {
@@ -471,6 +481,16 @@ function updateRosterSummary() {
   if (count("think")) parts.push(`${count("think")} thinking`);
   if (count("wait")) parts.push(`${count("wait")} waiting`);
   $("#rosterSummary").textContent = parts.join(" · ");
+  renderMiniRoster(chips, parts);
+}
+
+// Phones: one compact strip under the square shows every buyer's state at a glance.
+function renderMiniRoster(chips, parts) {
+  const strip = $("#miniRoster");
+  if (!strip) return;
+  strip.hidden = !chips.length;
+  const dots = chips.map((chip) => `<i data-state="${chip.dataset.state}" style="--seg:${chip.style.getPropertyValue("--seg")}"></i>`).join("");
+  strip.innerHTML = `<span class="mini-dots">${dots}</span><span class="mini-text">${escapeHtml(parts.join(" · "))}</span>`;
 }
 
 const STATE_WORDS = { queued: "In the queue", walking: "Walking to the stall", thinking: "Reading the pitch", buy: "Buys", pass: "Passes" };
@@ -1118,6 +1138,7 @@ function renderReview() {
       : "Quick sim counts a doubt as answered when the pitch uses its words, so the lift shows which doubts matter, not that your wording works. Fill each slot with a true answer, then re-check with AI buyers or a real test."}</p>`;
   $("#useBestBtn")?.addEventListener("click", () => {
     $("#pitch").value = best.pitch;
+    updatePitchSummary();
     persistLocal();
     renderObjections();
     toast(`Pitch replaced with v${best.version}. Your previous pitch is v0 in the rounds table.`);
@@ -1453,6 +1474,7 @@ $("#newProjectBtn").addEventListener("click", async () => {
   state.need = {};
   state.addressed = {};
   $("#pitch").value = "";
+  updatePitchSummary(true);
   $("#pitchB").value = "";
   $("#idea").value = "";
   $("#price").value = "";
@@ -1512,3 +1534,5 @@ for (const stepId of SETUP_STEPS) {
 for (const button of document.querySelectorAll(".step-next")) {
   button.addEventListener("click", () => openSetupStep(button.dataset.next));
 }
+$("#miniRoster")?.addEventListener("click", () => $(".feed").scrollIntoView({ behavior: "smooth", block: "start" }));
+$("#pitch")?.addEventListener("input", () => updatePitchSummary());
