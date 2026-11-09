@@ -386,6 +386,9 @@ function segmentHex(segment) {
   return SEGMENT_HEX[(index < 0 ? 0 : index) % SEGMENT_HEX.length];
 }
 
+// Newest first; cleared when a new roster is drawn.
+const recentDecisions = [];
+
 function feedItem(persona, answer, status) {
   let item = $(`#feedList li[data-id="${persona.id}"]`);
   if (!item) {
@@ -405,8 +408,13 @@ function feedItem(persona, answer, status) {
     : answer?.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>';
   if (status !== "thinking" && answer) {
     const verb = answer.buys ? '<b class="buy-text">BUY</b>' : '<b class="pass-text">PASS</b>';
-    setTicker(`<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> chose ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`
-      + `<button class="ghost ticker-jump" type="button" data-jump="feed">All buyers</button>`);
+    const line = `<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> chose ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`;
+    const earlier = recentDecisions.slice(0, 2);
+    recentDecisions.unshift(line);
+    recentDecisions.length = Math.min(recentDecisions.length, 3);
+    setTicker(line
+      + `<button class="ghost ticker-jump" type="button" data-jump="feed">All buyers</button>`
+      + (earlier.length ? `<ol class="ticker-earlier" aria-label="Earlier decisions">${earlier.map((row) => `<li>${row}</li>`).join("")}</ol>` : ""));
   }
   item.innerHTML = `<div class="who"><span><span class="dot" style="background:${segmentHex(persona.segment)}"></span><b>${escapeHtml(persona.name || persona.id)}</b> · ${escapeHtml(persona.segment)}</span>${tag}</div>
     <div class="why">${status === "thinking" ? escapeHtml(`"${persona.objection}"…`) : escapeHtml(answer?.reason || answer?.error || "")}</div>`;
@@ -414,10 +422,11 @@ function feedItem(persona, answer, status) {
 }
 
 // ---------------- roster: one chip per buyer, always showing their state ----------------
-const ROSTER_STATES = ["wait", "think", "buy", "pass"];
+const ROSTER_STATES = ["wait", "walk", "think", "buy", "pass"];
 
 function renderRoster(personas) {
   const roster = $("#roster");
+  recentDecisions.length = 0;
   if (!personas?.length) {
     const planned = Number($("#panelSize").value) || 0;
     const segments = state.customer?.segments || [];
@@ -467,7 +476,7 @@ function setRosterState(persona, rosterState, reason = "") {
   const chip = $(`#roster .rchip[data-id="${persona.id}"]`);
   if (!chip || !ROSTER_STATES.includes(rosterState)) return;
   chip.dataset.state = rosterState;
-  const label = { wait: "waiting", think: "thinking", buy: "BUY", pass: "PASS" }[rosterState];
+  const label = { wait: "waiting", walk: "walking to the stall", think: "thinking", buy: "BUY", pass: "PASS" }[rosterState];
   chip.title = `${persona.name || persona.id} · ${persona.segment} · ${label}${reason ? `: ${reason}` : ""}`;
   updateRosterSummary();
 }
@@ -479,18 +488,32 @@ function updateRosterSummary() {
   if (count("buy")) parts.push(`${count("buy")} buy`);
   if (count("pass")) parts.push(`${count("pass")} pass`);
   if (count("think")) parts.push(`${count("think")} thinking`);
+  if (count("walk")) parts.push(`${count("walk")} walking`);
   if (count("wait")) parts.push(`${count("wait")} waiting`);
   $("#rosterSummary").textContent = parts.join(" · ");
-  renderMiniRoster(chips, parts);
+  renderMiniRoster(chips);
 }
 
 // Phones: one compact strip under the square shows every buyer's state at a glance.
-function renderMiniRoster(chips, parts) {
+// Each dot is a button (tap to inspect that buyer); the tally doubles as the colour key.
+const MINI_KEY = [["buy", "buy"], ["pass", "pass"], ["think", "thinking"], ["walk", "walking"], ["wait", "waiting"]];
+
+function renderMiniRoster(chips) {
   const strip = $("#miniRoster");
   if (!strip) return;
   strip.hidden = !chips.length;
-  const dots = chips.map((chip) => `<i data-state="${chip.dataset.state}" style="--seg:${chip.style.getPropertyValue("--seg")}"></i>`).join("");
-  strip.innerHTML = `<span class="mini-dots">${dots}</span><span class="mini-text">${escapeHtml(parts.join(" · "))}</span>`;
+  const dots = chips.map((chip) => {
+    const label = escapeHtml(chip.title || chip.dataset.id);
+    const selected = chip.classList.contains("selected") ? " selected" : "";
+    return `<button type="button" class="mini-dot${selected}" data-id="${escapeHtml(chip.dataset.id)}" data-state="${chip.dataset.state}" title="${label}" aria-label="${label}"></button>`;
+  }).join("");
+  const key = MINI_KEY
+    .map(([stateName, word]) => [stateName, word, chips.filter((c) => c.dataset.state === stateName).length])
+    .filter(([, , n]) => n)
+    .map(([stateName, word, n]) => `<span class="mini-key"><i data-state="${stateName}"></i>${n} ${word}</span>`)
+    .join("");
+  strip.innerHTML = `<div class="mini-dots">${dots}</div><div class="mini-foot"><span class="mini-text">${key}</span>`
+    + `<button type="button" class="ghost mini-all">All buyers</button></div>`;
 }
 
 const STATE_WORDS = { queued: "In the queue", walking: "Walking to the stall", thinking: "Reading the pitch", buy: "Buys", pass: "Passes" };
@@ -540,6 +563,7 @@ function selectBot(id, kicker = "") {
   arena.highlight(id);
   // Link the 3D bot, its roster chip and its feed entry.
   for (const chip of $$("#roster .rchip")) chip.classList.toggle("selected", chip.dataset.id === id);
+  for (const dot of $$("#miniRoster .mini-dot")) dot.classList.toggle("selected", dot.dataset.id === id);
   for (const entry of $$("#feedList li")) {
     const isSelected = entry.dataset.id === id;
     entry.classList.toggle("selected", isSelected);
@@ -682,7 +706,9 @@ async function animateRun(run, price) {
     while (queue.length) {
       const persona = queue.shift();
       arena.setSpeed(speed());
-      await pause(arena.approach(persona.id));
+      const walkMs = arena.approach(persona.id);
+      setRosterState(persona, "walk");
+      await pause(walkMs);
       arena.think(persona.id);
       feedItem(persona, null, "thinking");
       let answer;
@@ -749,7 +775,9 @@ async function replay() {
     await pause(w * 300 / speed());
     while (queue.length) {
       const persona = queue.shift();
-      await pause(arena.approach(persona.id));
+      const walkMs = arena.approach(persona.id);
+      setRosterState(persona, "walk");
+      await pause(walkMs);
       arena.think(persona.id);
       feedItem(persona, null, "thinking");
       await pause((600 + Math.random() * 700) / speed());
@@ -1534,5 +1562,12 @@ for (const stepId of SETUP_STEPS) {
 for (const button of document.querySelectorAll(".step-next")) {
   button.addEventListener("click", () => openSetupStep(button.dataset.next));
 }
-$("#miniRoster")?.addEventListener("click", () => $(".feed").scrollIntoView({ behavior: "smooth", block: "start" }));
+$("#miniRoster")?.addEventListener("click", (event) => {
+  const dot = event.target.closest(".mini-dot");
+  if (dot) {
+    selectBot(dot.dataset.id);
+    return;
+  }
+  if (event.target.closest(".mini-all")) $(".feed").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 $("#pitch")?.addEventListener("input", () => updatePitchSummary());

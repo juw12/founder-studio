@@ -952,3 +952,40 @@ html { scrollbar-gutter: stable; }
 
 /* Counts read as figures. */
 .hud strong, .roster-sum, .mini-roster .mini-text, .pill { font-variant-numeric: tabular-nums; }
+
+/* Round v2-r8 */
+/* Walking is its own state: a dashed accent outline between waiting and thinking. */
+.rchip[data-state="walk"] { border-style: dashed; border-color: var(--accent); color: var(--text); }
+
+/* Desktop shows only the newest decision; phones list the two before it. */
+.ticker-earlier { display: none; }
+
+@media (max-width: 760px) {
+  .arena .mini-roster:not([hidden]) { flex-direction: column; align-items: stretch; gap: 8px; cursor: default; }
+  .mini-roster .mini-dots { gap: 4px; }
+  .mini-roster .mini-dot {
+    width: 18px; height: 18px; min-height: 0; padding: 0; border-radius: 5px;
+    border: 1px solid var(--line-strong); background: transparent; cursor: pointer;
+  }
+  .mini-roster .mini-dot.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .mini-roster [data-state="walk"] { border: 1.5px dashed var(--accent); background: transparent; }
+  .mini-roster [data-state="think"] { background: var(--think); border-color: var(--think); }
+  .mini-roster [data-state="buy"] { background: var(--buy); border-color: var(--buy); }
+  .mini-roster [data-state="pass"] { background: color-mix(in srgb, var(--pass) 40%, var(--panel)); border-color: var(--pass); }
+  .mini-roster .mini-foot { display: flex; align-items: center; gap: 8px; }
+  .mini-roster .mini-text { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .mini-roster .mini-key { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .mini-roster .mini-key i { width: 9px; height: 9px; border-radius: 3px; border: 1px solid var(--line-strong); }
+  .mini-roster .mini-all { flex: 0 0 auto; min-height: 36px; padding: 6px 10px; font-size: 12px; }
+
+  .ticker { flex-wrap: wrap; }
+  .ticker-earlier {
+    display: block; flex: 1 1 100%; list-style: none; margin: 2px 0 0; padding: 6px 0 0;
+    border-top: 1px solid var(--line); color: var(--muted); font-size: 12px;
+  }
+  .ticker-earlier li { display: flex; align-items: baseline; gap: 8px; line-height: 1.45; }
+  .ticker-earlier li .dot { flex: 0 0 auto; width: 7px; height: 7px; }
+  .ticker-earlier li { min-width: 0; }
+  .ticker-earlier li span:not(.dot) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ticker-earlier b { font-weight: 600; }
+}
