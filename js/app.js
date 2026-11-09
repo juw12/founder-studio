@@ -361,6 +361,10 @@ function setTicker(html, tone = "") {
   ticker.hidden = !html;
   ticker.className = `ticker ${tone}`;
   ticker.innerHTML = html;
+  // Phones: the full roster and decision list sit below the square; one tap jumps there.
+  ticker.querySelector("[data-jump=feed]")?.addEventListener("click", () => {
+    $(".feed").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   $("#tickerResults")?.addEventListener("click", () => {
     document.querySelector('.tab[data-tab="results"]')?.click();
     $(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -391,7 +395,8 @@ function feedItem(persona, answer, status) {
     : answer?.buys ? '<span class="tag buy">BUY</span>' : '<span class="tag pass">PASS</span>';
   if (status !== "thinking" && answer) {
     const verb = answer.buys ? '<b class="buy-text">BUY</b>' : '<b class="pass-text">PASS</b>';
-    setTicker(`<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> chose ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`);
+    setTicker(`<span class="dot" style="background:${segmentHex(persona.segment)}"></span><span><b>${escapeHtml(persona.name || persona.id)}</b> chose ${verb}: ${escapeHtml(answer.reason || answer.error || "")}</span>`
+      + `<button class="ghost ticker-jump" type="button" data-jump="feed">All buyers</button>`);
   }
   item.innerHTML = `<div class="who"><span><span class="dot" style="background:${segmentHex(persona.segment)}"></span><b>${escapeHtml(persona.name || persona.id)}</b> · ${escapeHtml(persona.segment)}</span>${tag}</div>
     <div class="why">${status === "thinking" ? escapeHtml(`"${persona.objection}"…`) : escapeHtml(answer?.reason || answer?.error || "")}</div>`;
@@ -1482,4 +1487,28 @@ document.getElementById("hintClose")?.addEventListener("click", () => {
 
 for (const fieldId of ["business", "price"]) {
   document.getElementById(fieldId)?.addEventListener("input", () => updateProductSummary());
+}
+
+// Guided setup: the three steps behave as one accordion when the user moves between them,
+// and each step ends with a "Next" button that opens the following one.
+const SETUP_STEPS = ["productSection", "buyersSection", "pitchSection"];
+function openSetupStep(id) {
+  for (const stepId of SETUP_STEPS) {
+    const section = document.getElementById(stepId);
+    if (section) section.open = stepId === id;
+  }
+  const target = document.getElementById(id);
+  target?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  target?.querySelector("input, textarea, select")?.focus({ preventScroll: true });
+}
+for (const stepId of SETUP_STEPS) {
+  const section = document.getElementById(stepId);
+  section?.querySelector(":scope > summary")?.addEventListener("click", (event) => {
+    if (section.open) return;
+    event.preventDefault();
+    openSetupStep(stepId);
+  });
+}
+for (const button of document.querySelectorAll(".step-next")) {
+  button.addEventListener("click", () => openSetupStep(button.dataset.next));
 }

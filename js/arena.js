@@ -98,6 +98,7 @@ function zoneDisc(color, label, x, z, radius) {
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), signMaterial);
   sign.position.set(0, 2.6, -radius - 0.2);
   sign.userData.billboard = true;
+  group.userData.sign = sign;
   group.add(disc, ring, sign);
   group.position.set(x, 0, z);
   // Redraws the sign with a live count, e.g. "BUY · 4".
@@ -133,6 +134,7 @@ function queueArea(width, z) {
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.5), signMaterial);
   sign.position.set(width / 2 + 1.9, 1.2, 0);
   sign.userData.billboard = true;
+  group.userData.sign = sign;
   // Rope-line posts at the four corners.
   const brass = new THREE.MeshStandardMaterial({ color: THEME.stallTop, roughness: 0.4, metalness: 0.3 });
   for (const [px, pz] of [[-width / 2, -1.7], [width / 2, -1.7], [-width / 2, 1.7], [width / 2, 1.7]]) {
@@ -385,7 +387,7 @@ export class Arena {
 
     // Warm afternoon light: sky fill, one sun with soft shadows, a cool bounce from the other side.
     this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 1.6));
-    const sun = new THREE.DirectionalLight(0xfff0d8, 1.15);
+    const sun = new THREE.DirectionalLight(0xffe4bf, 1.25);
     sun.position.set(9, 18, 11);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -397,7 +399,7 @@ export class Arena {
     sun.shadow.bias = -0.0006;
     sun.shadow.radius = 4;
     this.scene.add(sun);
-    const bounce = new THREE.DirectionalLight(0xdfe8f2, 0.35);
+    const bounce = new THREE.DirectionalLight(0xf0e2d0, 0.4);
     bounce.position.set(-10, 8, -6);
     this.scene.add(bounce);
 
@@ -491,6 +493,23 @@ export class Arena {
     this.selectRing.position.y = 0.05;
     this.selectRing.visible = false;
     this.scene.add(this.selectRing);
+    // Hover: a quiet ink ring under the buyer the pointer is on.
+    this.hoverRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.58, 0.66, 40),
+      new THREE.MeshBasicMaterial({ color: THEME.ink ?? 0x2b2620, transparent: true, opacity: 0.55 })
+    );
+    this.hoverRing.rotation.x = -Math.PI / 2;
+    this.hoverRing.position.y = 0.045;
+    this.hoverRing.visible = false;
+    this.scene.add(this.hoverRing);
+    // Selection: a floating accent pin above the chosen buyer, readable from any camera angle.
+    this.selectPin = new THREE.Mesh(
+      new THREE.ConeGeometry(0.22, 0.42, 20),
+      new THREE.MeshStandardMaterial({ color: THEME.accent, roughness: 0.5, emissive: THEME.accent, emissiveIntensity: 0.25 })
+    );
+    this.selectPin.rotation.x = Math.PI;
+    this.selectPin.visible = false;
+    this.scene.add(this.selectPin);
     this.lastDecidedId = null;
 
     this.raycaster = new THREE.Raycaster();
@@ -863,6 +882,9 @@ export class Arena {
     // The HUD covers the top of the canvas, so aim a little behind the stall: the queue
     // clears the HUD and both zones stay in frame. Phones have the HUD above the canvas.
     this.baseTarget = new THREE.Vector3(0, clientWidth < 600 ? 1.4 : 3.2, clientWidth < 600 ? 1.5 : -1.2);
+    // Small canvases render the signs at a few pixels high; enlarge them there.
+    const signScale = clientWidth < 600 ? 1.45 : 1;
+    for (const zone of [this.buyZone, this.passZone, this.queueZone]) zone?.userData.sign?.scale.setScalar(signScale);
     if (this.view === "overview" && !this.orbitGoal) {
       this.orbit.radius = this.baseRadius;
       this.orbit.target.copy(this.baseTarget);
@@ -1077,6 +1099,7 @@ export class Arena {
   highlight(id) {
     this.selectedId = id;
     this.selectRing.visible = Boolean(id && (this.bots.has(id) || this.reviewers.has(id)));
+    this.selectPin.visible = this.selectRing.visible;
     for (const [botId, label] of this.labels) label.classList.toggle("selected", botId === id);
     for (const [botId, label] of this.reviewerLabels || []) label.classList.toggle("selected", botId === id);
   }
@@ -1119,6 +1142,14 @@ export class Arena {
       this.selectRing.position.x = chosen.group.position.x;
       this.selectRing.position.z = chosen.group.position.z;
       this.selectRing.scale.setScalar(1 + Math.sin(time * 4) * 0.06);
+      this.selectPin.position.set(chosen.group.position.x, 2.05 * chosen.group.scale.x + Math.sin(time * 3) * 0.08, chosen.group.position.z);
+      this.selectPin.rotation.y = time * 1.5;
+    }
+    const hovered = this.hoveredId !== this.selectedId && (this.bots.get(this.hoveredId) || this.reviewers.get(this.hoveredId));
+    this.hoverRing.visible = Boolean(hovered);
+    if (hovered) {
+      this.hoverRing.position.x = hovered.group.position.x;
+      this.hoverRing.position.z = hovered.group.position.z;
     }
     this.faceSignsToCamera();
     this.renderer.render(this.scene, this.camera);

@@ -877,3 +877,26 @@ h3 { font-family: var(--font-display); font-size: 23px; font-weight: 400; margin
   }
   .arena .legend span { background: none; padding: 0; white-space: nowrap; }
 }
+
+/* Roster chips switch state instantly: a fading background under already-white text read as unreadable mid-change. */
+.rchip { transition: outline-color .15s; }
+
+/* Round v2-r5 (phone): the latest decision sits directly under the square, with a jump to the
+   full roster and decision list; the buyer inspector opens below the square instead of over it. */
+.ticker-jump { display: none; }
+@media (max-width: 760px) {
+  .arena .hud, .arena .badges { order: 1; }
+  .arena .arena-hint { order: 2; }
+  .arena canvas { order: 3; }
+  .arena .ticker, .arena .inspector { order: 4; }
+  .arena .ticker { margin: 8px 12px 0; }
+  .ticker .ticker-jump { display: inline-flex; flex: 0 0 auto; min-height: 36px; align-items: center; font-size: 12px; padding: 6px 10px; }
+  .arena .inspector {
+    position: static; flex: 1 1 100%; box-sizing: border-box; width: auto; max-width: none;
+    margin: 8px 12px 0; max-height: none; box-shadow: var(--shadow-card);
+  }
+  .bot-label { font-size: 14px; padding: 3px 8px; }
+}
+
+/* Guided setup: a quiet "Next" at the foot of each step. */
+.setup .step-next { display: block; margin: 10px 0 2px auto; font-size: 13px; padding: 6px 12px; min-height: 32px; }

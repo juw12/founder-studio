@@ -49,6 +49,7 @@
           <p class="hint">The price buyers compare you against. Quick sim only.</p>
           <label>Idea notes<textarea id="idea" rows="3" placeholder="What it is, for whom, how it's sold"></textarea></label>
         </details>
+        <button type="button" class="ghost step-next" data-next="buyersSection">Next: buyers</button>
       </details>
 
       <details id="buyersSection">
@@ -70,9 +71,10 @@
           </label>
           <label>Seed<input id="seed" type="number" placeholder="random"></label>
         </div>
+        <button type="button" class="ghost step-next" data-next="pitchSection">Next: pitch</button>
       </details>
 
-      <details open>
+      <details id="pitchSection" open>
         <summary><span class="step">3</span> Pitch (what each bot reads)</summary>
         <textarea id="pitch" rows="8" placeholder="3-6 plain lines: product, price, where/how, opening offer"></textarea>
         <p class="hint">Plain words, no superlatives, nothing you can't deliver.</p>
