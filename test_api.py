@@ -87,7 +87,9 @@ def fake_answers(personas):
 
 def test_folder_of_projects(workspace):
     root = workspace / "projects"
-    shutil.copytree(DEMO, root / "demo-matcha")
+    # Copy only the tracked demo inputs; local runs leave generated panel folders next to them.
+    generated = shutil.ignore_patterns("panel", "panel-*", "pitch-panel-*.md")
+    shutil.copytree(DEMO, root / "demo-matcha", ignore=generated)
     official = root / "demo-matcha" / "panel" / "results.json"
     official.parent.mkdir(parents=True)
     official.write_text('{"buys": 9, "passes": 11, "answered": 20, "buy_rate": 0.45}', encoding="utf-8")

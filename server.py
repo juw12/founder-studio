@@ -217,7 +217,7 @@ class Studio:
             args += ["--seed", int(body["seed"])]
         code, out, err = self.run_tool("panel.py", *args)
         if code != 0:
-            raise RuntimeError(err or out)
+            raise RuntimeError((err or out).strip() or f"panel.py init exited with code {code}")
         self.run_tool("panel.py", "--dir", panel, "prompts")
         personas = self.read_json(panel / "personas.json") or []
         briefs = {}
@@ -348,6 +348,7 @@ def make_handler(studio):
             except (ValueError, FileNotFoundError) as error:
                 return self.send_json(400, {"error": str(error)})
             except Exception as error:
+                print(f"[studio] {self.path} failed: {error!r}", file=sys.stderr, flush=True)
                 return self.send_json(500, {"error": str(error)})
             self.serve_static(path)
 
@@ -378,6 +379,7 @@ def make_handler(studio):
             except (ValueError, FileNotFoundError, KeyError) as error:
                 return self.send_json(400, {"error": str(error)})
             except Exception as error:
+                print(f"[studio] {self.path} failed: {error!r}", file=sys.stderr, flush=True)
                 return self.send_json(500, {"error": str(error)})
 
         def serve_static(self, path):
