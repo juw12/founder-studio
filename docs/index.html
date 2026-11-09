@@ -31,7 +31,7 @@
       <button data-mode="replay" class="seg" title="Replay a panel already saved in this project.">Replay</button>
     </div>
     <div class="run">
-      <label class="speed" title="How fast buyers walk in the arena. Does not change results.">Speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5"></label>
+      <label class="speed" title="How fast buyers walk in the arena. Does not change results.">Speed <input id="speed" type="range" min="0.5" max="4" step="0.5" value="1.5" aria-describedby="speedVal"><output id="speedVal" class="speed-val" for="speed">1.5×</output></label>
       <button id="skipBtn" class="ghost" hidden title="Finish this run instantly and show the results">Skip<span class="long"> to results</span></button>
       <button id="runBtn" class="primary">Run panel</button>
     </div>

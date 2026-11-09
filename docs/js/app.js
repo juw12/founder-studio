@@ -1460,7 +1460,13 @@ $("#loopStopBtn").addEventListener("click", () => {
   toast("The loop stops after the current step.");
 });
 $("#verdictBtn").addEventListener("click", computeVerdict);
-$("#speed").addEventListener("input", () => arena.setSpeed(speed()));
+const showSpeed = () => {
+  $("#speedVal").textContent = `${speed()}×`;
+};
+$("#speed").addEventListener("input", () => {
+  arena.setSpeed(speed());
+  showSpeed();
+});
 $("#minBuyRate").addEventListener("input", () => updateHud(state.current?.answers || [], state.current?.personas.length || 0, $("#stateText").textContent));
 $("#projectSelect").addEventListener("change", (event) => loadProject(event.target.value));
 $("#newProjectBtn").addEventListener("click", async () => {
@@ -1492,6 +1498,7 @@ $("#newProjectBtn").addEventListener("click", async () => {
 
 loadProjects().then(async () => {
   if (params.get("speed")) $("#speed").value = params.get("speed");
+  showSpeed();
   const autoMode = params.get("mode");
   if (autoMode) $(`.seg[data-mode="${autoMode}"]`)?.click();
   if (params.get("autorun") === "review") await runReviewLoop();
