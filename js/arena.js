@@ -1182,8 +1182,9 @@ export class Arena {
         label,
         bot,
         compact,
-        w: compact ? 24 : 64,
-        h: compact ? 18 : 26,
+        // Real label size (measured once it has rendered) so long names cannot overlap.
+        w: compact ? 24 : Math.max(label._w ||= label.offsetWidth, 58) + 6,
+        h: compact ? 18 : Math.max(label._h ||= label.offsetHeight, 22) + 4,
         priority: selected ? 0 : rank[bot.state],
         x: offsetLeft + ((projected.x + 1) / 2) * width,
         y: offsetTop + ((1 - projected.y) / 2) * height,
