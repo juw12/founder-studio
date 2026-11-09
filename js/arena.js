@@ -421,8 +421,8 @@ export class Arena {
     this.updateCamera();
 
     // Warm afternoon light: sky fill, one sun with soft shadows, a cool bounce from the other side.
-    this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 1.6));
-    const sun = new THREE.DirectionalLight(0xffe4bf, 1.25);
+    this.scene.add(new THREE.HemisphereLight(THEME.sky, THEME.ground, 1.2));
+    const sun = new THREE.DirectionalLight(0xffdcae, 1.7);
     sun.position.set(9, 18, 11);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -1144,7 +1144,8 @@ export class Arena {
   // Spot for the n-th buyer in a zone: a sunflower (golden-angle) layout that fills the disc from the
   // centre out, so every buyer keeps its own visible place instead of a grid spilling past the ring.
   pileSpot(cx, index) {
-    const capacity = Math.max(8, this.panelSize || 20);
+    // Size the spiral for one zone's share of the panel so a half-full zone still fills its ring.
+    const capacity = Math.max(6, Math.ceil((this.panelSize || 20) * 0.6));
     const radius = (ZONE_R - 0.55) * Math.sqrt((index + 0.5) / capacity);
     const angle = index * 2.399963;
     return new THREE.Vector3(cx + Math.cos(angle) * radius, 0, ZONE_Z + Math.sin(angle) * radius * 0.92);

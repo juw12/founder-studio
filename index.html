@@ -75,7 +75,7 @@
       </details>
 
       <details id="pitchSection" open>
-        <summary><span class="step">3</span> Pitch (what each bot reads) <span id="pitchSummary" class="sum-note"></span></summary>
+        <summary><span class="step">3</span> Pitch (what each buyer reads) <span id="pitchSummary" class="sum-note"></span></summary>
         <textarea id="pitch" rows="8" placeholder="3-6 plain lines: product, price, where/how, opening offer"></textarea>
         <p class="hint">Plain words, no superlatives, nothing you can't deliver.</p>
       </details>
@@ -92,7 +92,7 @@
         <label>Model<input id="model" placeholder="gpt-4o-mini · llama3.1 · claude-sonnet-4-5"></label>
         <label>API key<input id="apiKey" type="password" placeholder="kept in this tab only; or set OPENAI_API_KEY / ANTHROPIC_API_KEY"></label>
         <label>Buyers in parallel<input id="concurrency" type="number" min="1" max="10" value="4"></label>
-        <p class="hint">Every bot gets its own isolated call with the skill's brief: no bot sees another's answer.</p>
+        <p class="hint">Every buyer gets its own isolated call with the skill's brief: no buyer sees another's answer.</p>
       </details>
     </aside>
 
@@ -155,7 +155,7 @@
           </ol>
           <p class="modes-note"><b>Quick sim</b> = instant rule model, free, not AI. <b>AI buyers</b> = one isolated model call per buyer. <b>Replay</b> = re-watch a saved panel. All are simulations, not customers.</p>
         </div></section>
-        <section id="tab-pricing" class="panel"><p class="empty">Price answers appear here as bots decide (live preview), then the skill's van_westendorp.py result.</p></section>
+        <section id="tab-pricing" class="panel"><p class="empty">Price answers appear here as buyers decide (live preview), then the skill's van_westendorp.py result.</p></section>
         <section id="tab-numbers" class="panel"></section>
         <section id="tab-competitors" class="panel"></section>
         <section id="tab-ab" class="panel">
@@ -173,7 +173,7 @@
           <div class="review-head">
             <div>
               <h3>Review loop</h3>
-              <p class="hint">Five reviewer bots apply the board lenses to your pitch and the last run. An editor applies their fixes, the same buyers judge the new version, and the loop keeps a version only when more of them buy. Your pitch is only replaced if you press <b>Use as my pitch</b>.</p>
+              <p class="hint">Five reviewers apply the board lenses to your pitch and the last run. An editor applies their fixes, the same buyers judge the new version, and the loop keeps a version only when more of them buy. Your pitch is only replaced if you press <b>Use as my pitch</b>.</p>
             </div>
             <div class="review-controls">
               <label>Rounds<input id="loopRounds" type="number" min="1" max="6" step="1" value="3"></label>

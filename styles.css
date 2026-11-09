@@ -924,3 +924,6 @@ html { scrollbar-gutter: stable; }
 
 /* v2-r11: speed readout next to the slider */
 .speed-val { min-width: 30px; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+
+/* v2-r12: stat numerals in the mono face (Cairn style) */
+.hud-cell strong, .roster-sum, .speed-val, .mini-roster .mini-text { font-family: var(--font-mono); letter-spacing: -0.01em; }
