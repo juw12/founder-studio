@@ -1013,3 +1013,21 @@ html { scrollbar-gutter: stable; }
     white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
 }
+
+/* Round v2-r10: phone buyer tiles meet the 32 px tap-target floor and carry the buyer's initial. */
+@media (max-width: 760px) {
+  .mini-roster .mini-dots { gap: 2px; }
+  .mini-roster .mini-dot {
+    position: relative; width: 32px; height: 32px; padding: 4px;
+    font: 600 11px/1 var(--font-sans, inherit); color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .mini-roster .mini-dot::before { position: absolute; inset: 4px; width: auto; height: auto; z-index: 0; }
+  .mini-roster .mini-dot { isolation: isolate; }
+  .mini-roster .mini-dot::before { z-index: -1; }
+  .mini-roster .mini-dot[data-state="buy"] { color: #fff; }
+  .mini-roster .mini-dot[data-state="think"] { color: var(--think-fg, #fff); }
+  .mini-roster .mini-dot[data-state="pass"] { color: var(--pass-fg); }
+  .mini-roster.passive .mini-dots { gap: 3px; }
+  .mini-roster.passive .mini-dots i { width: 9px; height: 9px; border-radius: 3px; border: 1px solid var(--line-strong); }
+}

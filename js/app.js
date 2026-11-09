@@ -496,16 +496,23 @@ function updateRosterSummary() {
 
 // Phones: one compact strip under the square shows every buyer's state at a glance.
 // Each dot is a button (tap to inspect that buyer); the tally doubles as the colour key.
+const MINI_TAP_MAX = 30;
 const MINI_KEY = [["buy", "buy"], ["pass", "pass"], ["think", "thinking"], ["walk", "walking"], ["wait", "waiting"]];
 
 function renderMiniRoster(chips) {
   const strip = $("#miniRoster");
   if (!strip) return;
   strip.hidden = !chips.length;
+  // Up to MINI_TAP_MAX buyers: 32 px tiles with the buyer's initial, tap to inspect.
+  // Bigger panels: a passive dot per buyer so the strip stays short; the full list is one tap away.
+  const tappable = chips.length <= MINI_TAP_MAX;
+  strip.classList.toggle("passive", !tappable);
   const dots = chips.map((chip) => {
+    if (!tappable) return `<i data-state="${chip.dataset.state}"></i>`;
     const label = escapeHtml(chip.title || chip.dataset.id);
+    const initial = escapeHtml((chip.title || chip.dataset.id || "?").trim().charAt(0).toUpperCase());
     const selected = chip.classList.contains("selected") ? " selected" : "";
-    return `<button type="button" class="mini-dot${selected}" data-id="${escapeHtml(chip.dataset.id)}" data-state="${chip.dataset.state}" title="${label}" aria-label="${label}"></button>`;
+    return `<button type="button" class="mini-dot${selected}" data-id="${escapeHtml(chip.dataset.id)}" data-state="${chip.dataset.state}" title="${label}" aria-label="${label}">${initial}</button>`;
   }).join("");
   const key = MINI_KEY
     .map(([stateName, word]) => [stateName, word, chips.filter((c) => c.dataset.state === stateName).length])
