@@ -160,6 +160,9 @@ function queueArea(width, z) {
   return group;
 }
 
+// How long the newest-decision ring stays under the buyer who just chose.
+const LATEST_RING_SECONDS = 4;
+
 class Bot {
   constructor(persona, color, spawn) {
     this.persona = persona;
@@ -510,6 +513,17 @@ export class Arena {
     this.selectPin.rotation.x = Math.PI;
     this.selectPin.visible = false;
     this.scene.add(this.selectPin);
+    // Newest decision: an accent ring that follows the buyer who just chose and fades out,
+    // so the ticker line and the figure in the square read as the same person.
+    this.latestRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.6, 0.74, 40),
+      new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0, depthWrite: false })
+    );
+    this.latestRing.rotation.x = -Math.PI / 2;
+    this.latestRing.position.y = 0.04;
+    this.latestRing.visible = false;
+    this.scene.add(this.latestRing);
+    this.lastDecidedAt = 0;
     this.lastDecidedId = null;
 
     this.raycaster = new THREE.Raycaster();
@@ -1019,6 +1033,7 @@ export class Arena {
     if (!bot) return;
     bot.setDecision(buys);
     this.lastDecidedId = id;
+    this.lastDecidedAt = performance.now();
     const index = buys ? this.buySlots++ : this.passSlots++;
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
     bot.walkTo(this.pileSpot(buys ? 9 : -9, index));
@@ -1150,6 +1165,14 @@ export class Arena {
     if (hovered) {
       this.hoverRing.position.x = hovered.group.position.x;
       this.hoverRing.position.z = hovered.group.position.z;
+    }
+    const latest = this.lastDecidedId !== this.selectedId && this.bots.get(this.lastDecidedId);
+    const latestAge = (performance.now() - this.lastDecidedAt) / 1000;
+    this.latestRing.visible = Boolean(latest) && latestAge < LATEST_RING_SECONDS;
+    if (this.latestRing.visible) {
+      this.latestRing.position.x = latest.group.position.x;
+      this.latestRing.position.z = latest.group.position.z;
+      this.latestRing.material.opacity = 0.85 * (1 - latestAge / LATEST_RING_SECONDS);
     }
     this.faceSignsToCamera();
     this.renderer.render(this.scene, this.camera);
