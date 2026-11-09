@@ -983,6 +983,15 @@ export class Arena {
     if (label) label.dataset.state = "thinking";
   }
 
+  // Spot for the n-th buyer in a zone: a sunflower (golden-angle) layout that fills the disc from the
+  // centre out, so every buyer keeps its own visible place instead of a grid spilling past the ring.
+  pileSpot(cx, index) {
+    const capacity = Math.max(8, this.panelSize || 20);
+    const radius = (ZONE_R - 0.55) * Math.sqrt((index + 0.5) / capacity);
+    const angle = index * 2.399963;
+    return new THREE.Vector3(cx + Math.cos(angle) * radius, 0, ZONE_Z + Math.sin(angle) * radius * 0.92);
+  }
+
   decide(id, buys, shortReason) {
     const bot = this.bots.get(id);
     if (!bot) return;
@@ -990,12 +999,7 @@ export class Arena {
     this.lastDecidedId = id;
     const index = buys ? this.buySlots++ : this.passSlots++;
     (buys ? this.buyZone : this.passZone).userData.setCount(buys ? this.buySlots : this.passSlots);
-    const cx = buys ? 9 : -9;
-    const columns = this.panelSize > 30 ? 8 : 5;
-    const gap = columns === 8 ? 0.95 : 1.85;
-    const col = index % columns;
-    const row = Math.floor(index / columns);
-    bot.walkTo(new THREE.Vector3(cx + (col - (columns - 1) / 2) * gap, 0, ZONE_Z - 2.5 + row * gap));
+    bot.walkTo(this.pileSpot(buys ? 9 : -9, index));
     const label = this.labels.get(id);
     if (label) {
       label.dataset.state = buys ? "buy" : "pass";
